@@ -1,10 +1,11 @@
 /**
- * My Wallet (محفظتي) - Hybrid State & AI Financial Architecture
- * Vanilla JavaScript Module for Browser & Capacitor.js Android Native APK
+ * My Wallet v1.1 (محفظتي) - Clean Slate Hybrid Financial Architecture
+ * Zero Pre-stored Data | Standalone CSS Classes | DeepSeek Chat API
  */
 
 const STORAGE_KEYS = {
-  STATE: 'my_wallet_state_v1',
+  LEGACY_V1: 'my_wallet_state_v1',
+  STATE: 'my_wallet_state_v1_1',
   API_KEY: 'my_wallet_deepseek_api_key',
   API_URL: 'my_wallet_deepseek_api_url',
   THEME: 'my_wallet_theme_mode'
@@ -13,25 +14,15 @@ const STORAGE_KEYS = {
 const DEFAULT_API_URL = 'https://api.deepseek.com/chat/completions';
 
 /**
- * Initial Default State matching Section 4 of My Wallet Architecture Guide
+ * Clean Empty Initial State (Zero Pre-Populated Demo Data)
  */
-function getInitialDefaultState() {
+function getInitialCleanState() {
   return {
-    fx_rate: 14500,
-    wallets: {
-      "كاش سوري": { amount: 150000, currency: "SYP" },
-      "كاش دولار": { amount: 100, currency: "USD" }
-    },
-    projects: {
-      "أعمال الأكريليك": { netSYP: 50000, netUSD: 0, summary: "أرباح الشهر" }
-    },
-    debts: [
-      { id: 1, person: "العطار", amount: 50, currency: "USD", type: "علينا", note: "أمانة وساطة" }
-    ],
-    logs: [
-      { date: "2026-10-16 14:30", text: "استلام أمانة العطار وخصم أجور الشحن" },
-      { date: "2026-10-15 10:00", text: "عملية سابقة" }
-    ],
+    fx_rate: 15000,
+    wallets: {},
+    projects: {},
+    debts: [],
+    logs: [],
     archive: {
       projects: {},
       debts: []
@@ -39,14 +30,11 @@ function getInitialDefaultState() {
   };
 }
 
-let appState = getInitialDefaultState();
+let appState = getInitialCleanState();
 let currentTab = 'wallets';
 let pendingAIProposal = null;
 let currentHybridContext = null;
 
-/**
- * Safe LocalStorage Wrappers (Compatible with Sandboxed WebViews & Capacitor)
- */
 function safeGetStorage(key, fallback = null) {
   try {
     const raw = window.localStorage.getItem(key);
@@ -60,13 +48,18 @@ function safeSetStorage(key, value) {
   try {
     window.localStorage.setItem(key, value);
   } catch (err) {
-    // Fallback in restricted memory mode
+    // Ignore storage errors in restricted webviews
   }
 }
 
-/**
- * Format Current Date/Time as YYYY-MM-DD HH:mm
- */
+function safeRemoveStorage(key) {
+  try {
+    window.localStorage.removeItem(key);
+  } catch (err) {
+    // Ignore storage errors
+  }
+}
+
 function formatTimestamp(dateObj = new Date()) {
   const year = dateObj.getFullYear();
   const month = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -76,30 +69,19 @@ function formatTimestamp(dateObj = new Date()) {
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
 
-/**
- * Format Numeric Values Cleanly
- */
 function formatNumber(num, currency = '') {
   const cleanNum = Number(num) || 0;
   const formatted = cleanNum.toLocaleString('en-US', {
     minimumFractionDigits: currency === 'USD' && cleanNum % 1 !== 0 ? 2 : 0,
     maximumFractionDigits: 2
   });
-  if (currency === 'USD') {
-    return `$${formatted}`;
-  }
-  if (currency === 'SYP') {
-    return `${formatted} SYP`;
-  }
+  if (currency === 'USD') return `$${formatted}`;
+  if (currency === 'SYP') return `${formatted} SYP`;
   return formatted;
 }
 
-/**
- * Escape HTML to prevent XSS when rendering user strings
- */
 function escapeHtml(text) {
-  const str = String(text ?? '');
-  return str
+  return String(text ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -108,37 +90,36 @@ function escapeHtml(text) {
 }
 
 /**
- * Initialize State & Theme from LocalStorage
+ * Initialize Application & Purge Legacy v1.0 Demo Data
  */
 function initApp() {
+  // Remove legacy v1.0 pre-populated demo state automatically
+  safeRemoveStorage(STORAGE_KEYS.LEGACY_V1);
+
   const savedTheme = safeGetStorage(STORAGE_KEYS.THEME, 'light');
   applyThemeMode(savedTheme);
 
   const rawState = safeGetStorage(STORAGE_KEYS.STATE, null);
   if (rawState) {
     try {
-      const parsed = JSON.parse(rawState);
-      appState = normalizeStateSchema(parsed);
+      appState = normalizeStateSchema(JSON.parse(rawState));
     } catch (e) {
-      appState = getInitialDefaultState();
+      appState = getInitialCleanState();
     }
   } else {
-    appState = getInitialDefaultState();
+    appState = getInitialCleanState();
     saveStateToStorage();
   }
 
   renderUI();
 }
 
-/**
- * Ensure State Schema Integrity
- */
 function normalizeStateSchema(raw) {
-  const fallback = getInitialDefaultState();
-  if (!raw || typeof raw !== 'object') return fallback;
+  const clean = getInitialCleanState();
+  if (!raw || typeof raw !== 'object') return clean;
 
   return {
-    fx_rate: Number(raw.fx_rate) > 0 ? Number(raw.fx_rate) : fallback.fx_rate,
+    fx_rate: Number(raw.fx_rate) > 0 ? Number(raw.fx_rate) : clean.fx_rate,
     wallets: raw.wallets && typeof raw.wallets === 'object' ? raw.wallets : {},
     projects: raw.projects && typeof raw.projects === 'object' ? raw.projects : {},
     debts: Array.isArray(raw.debts) ? raw.debts : [],
@@ -150,29 +131,18 @@ function normalizeStateSchema(raw) {
   };
 }
 
-/**
- * Persist State to LocalStorage
- */
 function saveStateToStorage() {
   safeSetStorage(STORAGE_KEYS.STATE, JSON.stringify(appState));
 }
 
-/**
- * Add Operation Log Locally
- */
 function appendLog(text) {
-  if (!Array.isArray(appState.logs)) {
-    appState.logs = [];
-  }
+  if (!Array.isArray(appState.logs)) appState.logs = [];
   appState.logs.unshift({
     date: formatTimestamp(),
     text: text
   });
 }
 
-/**
- * Show Toast Notification
- */
 let toastTimeoutId = null;
 function showToast(message) {
   const banner = document.getElementById('toast-banner');
@@ -181,13 +151,13 @@ function showToast(message) {
 
   msgEl.textContent = message;
   banner.classList.remove('hidden');
-  banner.classList.add('flex');
+  banner.style.display = 'inline-flex';
 
   if (toastTimeoutId) clearTimeout(toastTimeoutId);
   toastTimeoutId = setTimeout(() => {
     banner.classList.add('hidden');
-    banner.classList.remove('flex');
-  }, 3200);
+    banner.style.display = 'none';
+  }, 3000);
 }
 
 /**
@@ -195,12 +165,19 @@ function showToast(message) {
  */
 function applyThemeMode(mode) {
   const root = document.documentElement;
+  const sunIcon = document.getElementById('icon-sun');
+  const moonIcon = document.getElementById('icon-moon');
+
   if (mode === 'dark') {
     root.classList.add('dark');
     root.classList.remove('light');
+    if (sunIcon) sunIcon.classList.remove('hidden');
+    if (moonIcon) moonIcon.classList.add('hidden');
   } else {
     root.classList.add('light');
     root.classList.remove('dark');
+    if (sunIcon) sunIcon.classList.add('hidden');
+    if (moonIcon) moonIcon.classList.remove('hidden');
   }
   safeSetStorage(STORAGE_KEYS.THEME, mode);
 }
@@ -211,7 +188,7 @@ function toggleTheme() {
 }
 
 /**
- * Switch Active View Tab
+ * Navigation Tab Switching
  */
 function switchTab(tabName) {
   currentTab = tabName;
@@ -224,41 +201,31 @@ function switchTab(tabName) {
   const btnProjects = document.getElementById('tab-btn-projects');
   const btnDebts = document.getElementById('tab-btn-debts');
 
-  const activeClasses = ['bg-[#065F46]', 'text-white', 'dark:bg-[#10B981]', 'dark:text-[#0A0F0D]', 'shadow-sm'];
-  const inactiveClasses = ['text-slate-600', 'dark:text-slate-400'];
-
-  [btnWallets, btnProjects, btnDebts].forEach((btn) => {
-    if (!btn) return;
-    btn.classList.remove(...activeClasses);
-    btn.classList.add(...inactiveClasses);
+  [btnWallets, btnProjects, btnDebts].forEach((b) => {
+    if (b) b.classList.remove('active');
   });
 
   if (tabName === 'wallets') {
     walletsPanel.classList.remove('hidden');
     projectsPanel.classList.add('hidden');
-    btnWallets.classList.add(...activeClasses);
-    btnWallets.classList.remove(...inactiveClasses);
+    if (btnWallets) btnWallets.classList.add('active');
   } else if (tabName === 'projects') {
     walletsPanel.classList.add('hidden');
     projectsPanel.classList.remove('hidden');
     subProjects.classList.remove('hidden');
     subDebts.classList.remove('hidden');
-    btnProjects.classList.add(...activeClasses);
-    btnProjects.classList.remove(...inactiveClasses);
+    if (btnProjects) btnProjects.classList.add('active');
   } else if (tabName === 'debts') {
     walletsPanel.classList.add('hidden');
     projectsPanel.classList.remove('hidden');
     subProjects.classList.add('hidden');
     subDebts.classList.remove('hidden');
-    btnDebts.classList.add(...activeClasses);
-    btnDebts.classList.remove(...inactiveClasses);
+    if (btnDebts) btnDebts.classList.add('active');
   }
 }
 
 /**
- * State Pruning & Auto-Archiving (archiveClosedItems)
- * Moves settled debts (amount <= 0 or settled: true) and closed projects to `archive`
- * so they are isolated from future AI API requests.
+ * State Pruning & Auto-Archiving (`archiveClosedItems`)
  */
 function archiveClosedItems(targetState = appState) {
   if (!targetState.archive) {
@@ -267,9 +234,6 @@ function archiveClosedItems(targetState = appState) {
   if (!targetState.archive.projects) targetState.archive.projects = {};
   if (!Array.isArray(targetState.archive.debts)) targetState.archive.debts = [];
 
-  const archivedItemsLog = [];
-
-  // 1. Archive debts with amount <= 0 or settled === true
   if (Array.isArray(targetState.debts)) {
     const remainingDebts = [];
     targetState.debts.forEach((debt) => {
@@ -280,7 +244,6 @@ function archiveClosedItems(targetState = appState) {
           amount: amt,
           archivedAt: formatTimestamp()
         });
-        archivedItemsLog.push(`أرشفة دين مسدد: ${debt.person}`);
       } else {
         remainingDebts.push(debt);
       }
@@ -288,7 +251,6 @@ function archiveClosedItems(targetState = appState) {
     targetState.debts = remainingDebts;
   }
 
-  // 2. Archive projects explicitly flagged closed/archived or zeroed out after settlement
   if (targetState.projects && typeof targetState.projects === 'object') {
     Object.keys(targetState.projects).forEach((projName) => {
       const proj = targetState.projects[projName];
@@ -298,19 +260,13 @@ function archiveClosedItems(targetState = appState) {
           archivedAt: formatTimestamp()
         };
         delete targetState.projects[projName];
-        archivedItemsLog.push(`أرشفة مشروع مغلق: ${projName}`);
       }
     });
   }
-
-  return archivedItemsLog;
 }
 
 /**
- * Build Pruned Context Object for DeepSeek AI
- * Rules:
- * 1. Exclude `archive` completely.
- * 2. Slice `logs` to ONLY the last 3 entries.
+ * Context Window Pruning for DeepSeek AI (Active State + Last 3 Logs only, No Archive)
  */
 function buildPrunedContextForAI(sourceState = appState) {
   const recentThreeLogs = Array.isArray(sourceState.logs)
@@ -318,7 +274,7 @@ function buildPrunedContextForAI(sourceState = appState) {
     : [];
 
   return {
-    fx_rate: Number(sourceState.fx_rate) || 14500,
+    fx_rate: Number(sourceState.fx_rate) || 15000,
     wallets: JSON.parse(JSON.stringify(sourceState.wallets || {})),
     projects: JSON.parse(JSON.stringify(sourceState.projects || {})),
     debts: JSON.parse(JSON.stringify(sourceState.debts || [])),
@@ -326,9 +282,6 @@ function buildPrunedContextForAI(sourceState = appState) {
   };
 }
 
-/**
- * Construct Strict System Prompt per Section 6 of Architecture Guide
- */
 function buildSystemPrompt(sourceState = appState) {
   const prunedState = buildPrunedContextForAI(sourceState);
   return `أنت محاسب مالي ذكي تدير نظام 'الورقة البيضاء المطلقة'. لديك الحالة المالية الحالية التالية للمستخدم (متضمنة آخر 3 حركات للسياق):
@@ -341,8 +294,7 @@ ${JSON.stringify(prunedState, null, 2)}
 }
 
 /**
- * Validation & State Diffing Layer (validateState)
- * Inspects `updated_state` vs `currentState` to detect deleted wallets, projects, or debts.
+ * State Diffing & Validation (`validateState`)
  */
 function validateState(currentState, updatedState) {
   const warnings = [];
@@ -352,7 +304,7 @@ function validateState(currentState, updatedState) {
     return {
       valid: false,
       requiresConfirmation: false,
-      error: 'كائن updated_state القادم من الذكاء الاصطناعي غير صالح.',
+      error: 'كائن الحالة القادم من الذكاء الاصطناعي غير صالح.',
       warnings: [],
       changes: []
     };
@@ -361,7 +313,6 @@ function validateState(currentState, updatedState) {
   const curWallets = currentState.wallets || {};
   const newWallets = updatedState.wallets || {};
 
-  // Check for deleted wallets (Exact alert message required by specification)
   Object.keys(curWallets).forEach((walletName) => {
     if (!Object.prototype.hasOwnProperty.call(newWallets, walletName)) {
       warnings.push(`تنبيه: هذا الإجراء سيحذف محفظة [${walletName}] بالكامل، هل أنت متأكد؟`);
@@ -382,7 +333,6 @@ function validateState(currentState, updatedState) {
     }
   });
 
-  // Check for deleted projects
   const curProjects = currentState.projects || {};
   const newProjects = updatedState.projects || {};
   Object.keys(curProjects).forEach((projName) => {
@@ -394,7 +344,7 @@ function validateState(currentState, updatedState) {
       const oldUsd = Number(curProjects[projName].netUSD) || 0;
       const newUsd = Number(newProjects[projName].netUSD) || 0;
       if (oldSyp !== newSyp || oldUsd !== newUsd) {
-        changes.push(`تحديث عوائد مشروع "${projName}": SYP (${formatNumber(oldSyp)} -> ${formatNumber(newSyp)}) | USD (${formatNumber(oldUsd, 'USD')} -> ${formatNumber(newUsd, 'USD')})`);
+        changes.push(`تحديث مشروع "${projName}"`);
       }
     }
   });
@@ -405,7 +355,6 @@ function validateState(currentState, updatedState) {
     }
   });
 
-  // Check for deleted debts
   const curDebts = Array.isArray(currentState.debts) ? currentState.debts : [];
   const newDebts = Array.isArray(updatedState.debts) ? updatedState.debts : [];
   curDebts.forEach((oldDebt) => {
@@ -415,24 +364,11 @@ function validateState(currentState, updatedState) {
     );
     if (!match) {
       warnings.push(`تنبيه: هذا الإجراء سيحذف سجل الدين الخاص بـ [${oldDebt.person}] بالكامل، هل أنت متأكد؟`);
-    } else if (Number(match.amount) !== Number(oldDebt.amount)) {
-      changes.push(`تعديل ذمة "${oldDebt.person}": من ${formatNumber(oldDebt.amount, oldDebt.currency)} إلى ${formatNumber(match.amount, match.currency || oldDebt.currency)}`);
     }
   });
 
-  newDebts.forEach((newDebt) => {
-    const existed = curDebts.find((d) =>
-      (d.id !== undefined && d.id === newDebt.id) ||
-      (d.person && d.person === newDebt.person)
-    );
-    if (!existed) {
-      changes.push(`إضافة ذمة جديدة (${newDebt.type || 'علينا'}): ${newDebt.person} بقيمة ${formatNumber(newDebt.amount, newDebt.currency || 'USD')}`);
-    }
-  });
-
-  // Check FX Rate change
   if (Number(updatedState.fx_rate) && Number(updatedState.fx_rate) !== Number(currentState.fx_rate)) {
-    changes.push(`تعديل سعر الصرف: من ${formatNumber(currentState.fx_rate)} إلى ${formatNumber(updatedState.fx_rate)} ل.س/$`);
+    changes.push(`تحديث سعر الصرف إلى ${formatNumber(updatedState.fx_rate)} ل.س/$`);
   }
 
   return {
@@ -444,19 +380,17 @@ function validateState(currentState, updatedState) {
 }
 
 /**
- * Render Complete UI
+ * Render Complete UI with Standalone CSS Classes
  */
 function renderUI() {
-  const fx = Number(appState.fx_rate) || 14500;
+  const fx = Number(appState.fx_rate) || 15000;
 
-  // 1. Update Header FX Rate & Logs Badge
   const fxEl = document.getElementById('header-fx-value');
   if (fxEl) fxEl.textContent = formatNumber(fx);
 
   const logsBadge = document.getElementById('logs-count-badge');
   if (logsBadge) logsBadge.textContent = String((appState.logs || []).length);
 
-  // 2. Calculate & Render Top Financial Overview
   let totalWalletsSYP = 0;
   let totalWalletsUSD = 0;
   Object.values(appState.wallets || {}).forEach((w) => {
@@ -494,20 +428,15 @@ function renderUI() {
   if (sumSypEl) sumSypEl.textContent = `${formatNumber(totalWalletsSYP)} ل.س`;
   if (sumUsdEl) sumUsdEl.textContent = formatNumber(totalWalletsUSD, 'USD');
   if (sumProjEl) sumProjEl.textContent = `${formatNumber(Math.round(totalProjectsSYP))} ل.س`;
-  if (sumDebtsCountEl) sumDebtsCountEl.textContent = `${activeDebts.length} ذمم`;
+  if (sumDebtsCountEl) sumDebtsCountEl.textContent = `${activeDebts.length}`;
   if (sumDebtsNetEl) {
     const sign = netDebtsUSD > 0 ? '+' : '';
     sumDebtsNetEl.textContent = `${sign}${formatNumber(netDebtsUSD, 'USD')}`;
   }
 
-  // 3. Render Wallets Cards
   renderWalletsSection(fx);
-
-  // 4. Render Projects & Debts Cards
   renderProjectsSection(fx);
   renderDebtsSection();
-
-  // 5. Render Active Context Window Strip (Last 3 Logs)
   renderContextLogsStrip();
 }
 
@@ -518,8 +447,12 @@ function renderWalletsSection(fx) {
   const entries = Object.entries(appState.wallets || {});
   if (entries.length === 0) {
     grid.innerHTML = `
-      <div class="col-span-full p-6 rounded-xl bg-white dark:bg-[#121A16] hairline-border text-center text-xs text-slate-500 dark:text-slate-400">
-        لا توجد محافظ نشطة حالياً. يمكنك إضافة محفظة يدوياً أو عبر المساعد الذكي.
+      <div class="empty-state-box" style="grid-column: 1 / -1;">
+        <svg style="width:1.75rem; height:1.75rem; color:var(--emerald-primary); opacity:0.8;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/>
+          <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>
+        </svg>
+        <div>لا توجد محافظ مضافة حالياً. اضغط على <strong>"إضافة محفظة"</strong> أو استخدم المساعد الذكي لإنشاء محفظتك الأولى.</div>
       </div>
     `;
     return;
@@ -534,37 +467,56 @@ function renderWalletsSection(fx) {
     const safeName = escapeHtml(name);
 
     return `
-      <article class="p-4 rounded-xl bg-white dark:bg-[#121A16] hairline-border flex flex-col justify-between gap-4 hover:border-[#065F46]/50 dark:hover:border-[#10B981]/50 transition-colors">
-        <div class="flex items-start justify-between gap-2">
-          <div class="flex items-center gap-2.5">
-            <div class="w-9 h-9 rounded-lg bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border flex items-center justify-center text-[#065F46] dark:text-[#10B981]">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/>
-                <path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/>
-                <path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/>
+      <article class="item-card">
+        <div class="card-top-row">
+          <div style="display:flex; align-items:center; gap:0.65rem;">
+            <div class="wallet-icon-box">
+              <svg style="width:1.1rem; height:1.1rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/>
+                <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>
               </svg>
             </div>
             <div>
-              <h3 class="text-sm font-bold text-[#1E293B] dark:text-slate-100">${safeName}</h3>
-              <span class="text-[11px] text-slate-400 dark:text-slate-500">${equivalent}</span>
+              <h3 class="card-title">${safeName}</h3>
+              <span class="card-subtext">${equivalent}</span>
             </div>
           </div>
-          <span class="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-emerald-950/10 text-[#065F46] dark:bg-emerald-500/10 dark:text-[#10B981]">${currency}</span>
+          <span class="badge-pill">${currency}</span>
         </div>
 
-        <div class="pt-1">
-          <div class="text-xl font-bold num-ltr text-[#1E293B] dark:text-white">${formatNumber(amount, currency)}</div>
-        </div>
+        <div class="card-balance num-ltr">${formatNumber(amount, currency)}</div>
 
-        <div class="pt-2 border-t border-slate-100 dark:border-[#1F2D27] flex items-center gap-1.5">
-          <button type="button" onclick="openWalletAdjustModal('${safeName}', 'deposit')" class="flex-1 py-1.5 px-2 rounded-lg bg-emerald-950/5 hover:bg-emerald-950/10 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 text-[#065F46] dark:text-[#10B981] text-xs font-semibold transition-colors">
-            + إيداع
+        <div class="wallet-actions-row">
+          <button type="button" onclick="openWalletAdjustModal('${safeName}', 'deposit')" class="btn-wallet-deposit" title="إيداع مبلغ">
+            <svg style="width:0.9rem; height:0.9rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3v12"/>
+              <path d="m7 10 5 5 5-5"/>
+              <path d="M5 21h14"/>
+            </svg>
+            <span>إيداع</span>
           </button>
-          <button type="button" onclick="openWalletAdjustModal('${safeName}', 'withdraw')" class="flex-1 py-1.5 px-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-[#0A0F0D] dark:hover:bg-slate-900 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors">
-            - سحب
+
+          <button type="button" onclick="openWalletAdjustModal('${safeName}', 'withdraw')" class="btn-wallet-withdraw" title="سحب مبلغ">
+            <svg style="width:0.9rem; height:0.9rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 15V3"/>
+              <path d="m7 8 5-5 5 5"/>
+              <path d="M5 21h14"/>
+            </svg>
+            <span>سحب</span>
           </button>
-          <button type="button" onclick="openWalletAdjustModal('${safeName}', 'set')" title="تعديل الرصيد المباشر" class="py-1.5 px-2.5 rounded-lg hairline-border text-slate-600 dark:text-slate-400 hover:text-[#065F46] dark:hover:text-[#10B981] text-xs font-semibold transition-colors">
-            تعديل
+
+          <button type="button" onclick="openWalletAdjustModal('${safeName}', 'set')" class="btn-wallet-icon" title="تعديل الرصيد المباشر" aria-label="تعديل الرصيد">
+            <svg style="width:0.9rem; height:0.9rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h9"/>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+            </svg>
+          </button>
+
+          <button type="button" onclick="deleteWalletLocally('${safeName}')" class="btn-wallet-icon danger" title="حذف المحفظة" aria-label="حذف المحفظة">
+            <svg style="width:0.9rem; height:0.9rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
           </button>
         </div>
       </article>
@@ -579,8 +531,8 @@ function renderProjectsSection(fx) {
   const entries = Object.entries(appState.projects || {});
   if (entries.length === 0) {
     grid.innerHTML = `
-      <div class="p-6 rounded-xl bg-white dark:bg-[#121A16] hairline-border text-center text-xs text-slate-500 dark:text-slate-400">
-        لا توجد مشاريع نشطة حالياً. المشاريع المصفّرة تنتقل تلقائياً إلى الأرشيف.
+      <div class="empty-state-box">
+        <span>لا توجد مشاريع نشطة حالياً. يمكنك إضافة مشروع جديد لمتابعة أرباحه ومصاريفه.</span>
       </div>
     `;
     return;
@@ -594,35 +546,28 @@ function renderProjectsSection(fx) {
     const totalInSYP = netSYP + (netUSD * fx);
 
     return `
-      <article class="p-4 rounded-xl bg-white dark:bg-[#121A16] hairline-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div class="space-y-1">
-          <div class="flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-[#065F46] dark:bg-[#10B981]"></span>
-            <h3 class="text-sm font-bold text-[#1E293B] dark:text-slate-100">${safeName}</h3>
-            <span class="text-xs text-slate-500 dark:text-slate-400">— ${summary}</span>
+      <article class="item-card">
+        <div class="card-top-row">
+          <div>
+            <h3 class="card-title">${safeName}</h3>
+            <p class="card-subtext">${summary}</p>
           </div>
-          <div class="flex flex-wrap items-center gap-3 pt-1">
-            <div class="text-xs text-slate-500 dark:text-slate-400">
-              صافي ل.س: <strong class="num-ltr text-[#1E293B] dark:text-slate-100">${formatNumber(netSYP)} SYP</strong>
-            </div>
-            <div class="text-xs text-slate-500 dark:text-slate-400">
-              صافي دولار: <strong class="num-ltr text-[#1E293B] dark:text-slate-100">${formatNumber(netUSD, 'USD')}</strong>
-            </div>
-            <div class="text-[11px] px-2 py-0.5 rounded bg-emerald-950/5 dark:bg-emerald-500/10 text-[#065F46] dark:text-[#10B981] font-medium">
-              المحصلة المقومة: <span class="num-ltr font-bold">${formatNumber(Math.round(totalInSYP))} ل.س</span>
-            </div>
-          </div>
+          <span class="badge-pill num-ltr">${formatNumber(Math.round(totalInSYP))} ل.س</span>
         </div>
 
-        <div class="flex items-center gap-2 shrink-0">
-          <button type="button" onclick="openProjectEditModal('${safeName}')" class="px-3 py-1.5 rounded-lg hairline-border text-xs font-semibold text-slate-700 dark:text-slate-300 hover:border-[#065F46] dark:hover:border-[#10B981]">
-            تعديل العوائد
-          </button>
-          <button type="button" onclick="settleAndArchiveProject('${safeName}')" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#065F46] hover:bg-[#047857] dark:bg-[#10B981] text-white dark:text-[#0A0F0D] text-xs font-bold transition-colors">
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
+        <div style="display:flex; flex-wrap:wrap; gap:1rem; font-size:0.78rem; color:var(--text-muted);">
+          <div>صافي الليرة: <strong class="num-ltr" style="color:var(--text-main);">${formatNumber(netSYP)} SYP</strong></div>
+          <div>صافي الدولار: <strong class="num-ltr" style="color:var(--text-main);">${formatNumber(netUSD, 'USD')}</strong></div>
+        </div>
+
+        <div style="display:flex; align-items:center; justify-content:flex-end; gap:0.45rem; padding-top:0.65rem; border-top:1px solid var(--border-hairline);">
+          <button type="button" onclick="openProjectEditModal('${safeName}')" class="btn-secondary">تعديل</button>
+          <button type="button" onclick="settleAndArchiveProject('${safeName}')" class="btn-emerald">إغلاق وأرشفة</button>
+          <button type="button" onclick="deleteProjectLocally('${safeName}')" class="btn-wallet-icon danger" title="حذف المشروع">
+            <svg style="width:0.9rem; height:0.9rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
             </svg>
-            <span>إغلاق وأرشفة</span>
           </button>
         </div>
       </article>
@@ -637,8 +582,8 @@ function renderDebtsSection() {
   const debts = Array.isArray(appState.debts) ? appState.debts : [];
   if (debts.length === 0) {
     listEl.innerHTML = `
-      <div class="p-6 rounded-xl bg-white dark:bg-[#121A16] hairline-border text-center text-xs text-slate-500 dark:text-slate-400">
-        لا توجد ديون أو ذمم نشطة حالياً. جميع الذمم المسددة محفوظة في الأرشيف.
+      <div class="empty-state-box">
+        <span>لا توجد ديون أو ذمم مسجلة حالياً.</span>
       </div>
     `;
     return;
@@ -646,33 +591,31 @@ function renderDebtsSection() {
 
   listEl.innerHTML = debts.map((debt) => {
     const isLana = debt.type === 'لنا';
-    const badgeClass = isLana
-      ? 'bg-emerald-950/10 text-[#065F46] dark:bg-emerald-500/15 dark:text-[#10B981]'
-      : 'bg-amber-500/15 text-amber-800 dark:text-amber-300';
     const safePerson = escapeHtml(debt.person || 'غير مسمى');
     const safeNote = escapeHtml(debt.note || '');
     const currency = (debt.currency || 'USD').toUpperCase();
 
     return `
-      <article class="p-4 rounded-xl bg-white dark:bg-[#121A16] hairline-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div class="space-y-1">
-          <div class="flex items-center gap-2">
-            <span class="px-2 py-0.5 rounded text-[11px] font-bold ${badgeClass}">${escapeHtml(debt.type || 'علينا')}</span>
-            <h3 class="text-sm font-bold text-[#1E293B] dark:text-slate-100">${safePerson}</h3>
-            <span class="text-xs font-mono font-bold num-ltr text-[#065F46] dark:text-[#10B981]">${formatNumber(debt.amount, currency)}</span>
+      <article class="item-card">
+        <div class="card-top-row">
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <span class="badge-pill ${isLana ? '' : 'amber'}">${escapeHtml(debt.type || 'علينا')}</span>
+            <div>
+              <h3 class="card-title">${safePerson}</h3>
+              ${safeNote ? `<p class="card-subtext">${safeNote}</p>` : ''}
+            </div>
           </div>
-          ${safeNote ? `<p class="text-xs text-slate-500 dark:text-slate-400">${safeNote}</p>` : ''}
+          <span class="num-ltr" style="font-size:1rem; font-weight:700; color:var(--emerald-primary);">${formatNumber(debt.amount, currency)}</span>
         </div>
 
-        <div class="flex items-center gap-2 shrink-0">
-          <button type="button" onclick="openDebtEditModal(${Number(debt.id)})" class="px-3 py-1.5 rounded-lg hairline-border text-xs font-semibold text-slate-700 dark:text-slate-300 hover:border-[#065F46] dark:hover:border-[#10B981]">
-            تعديل
-          </button>
-          <button type="button" onclick="settleDebtLocally(${Number(debt.id)})" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#065F46] hover:bg-[#047857] dark:bg-[#10B981] text-white dark:text-[#0A0F0D] text-xs font-bold transition-colors">
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
+        <div style="display:flex; align-items:center; justify-content:flex-end; gap:0.45rem; padding-top:0.65rem; border-top:1px solid var(--border-hairline);">
+          <button type="button" onclick="openDebtEditModal(${Number(debt.id)})" class="btn-secondary">تعديل</button>
+          <button type="button" onclick="settleDebtLocally(${Number(debt.id)})" class="btn-emerald">تسوية وأرشفة</button>
+          <button type="button" onclick="deleteDebtLocally(${Number(debt.id)})" class="btn-wallet-icon danger" title="حذف الذمة">
+            <svg style="width:0.9rem; height:0.9rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
             </svg>
-            <span>تسوية / إغلاق</span>
           </button>
         </div>
       </article>
@@ -686,36 +629,31 @@ function renderContextLogsStrip() {
 
   const recentThree = (appState.logs || []).slice(0, 3);
   if (recentThree.length === 0) {
-    container.innerHTML = `<div class="text-xs text-slate-400">لا توجد حركات مسجلة بعد.</div>`;
+    container.innerHTML = `<div style="font-size:0.74rem; color:var(--text-muted); text-align:center; padding:0.4rem 0;">لا توجد حركات مسجلة بعد.</div>`;
     return;
   }
 
-  container.innerHTML = recentThree.map((item, idx) => `
-    <div class="flex items-center justify-between gap-2 py-1 px-2 rounded bg-[#F8FAF9] dark:bg-[#0A0F0D]">
-      <div class="flex items-center gap-2 truncate">
-        <span class="w-4 h-4 rounded-full bg-emerald-950/10 dark:bg-emerald-500/15 text-[#065F46] dark:text-[#10B981] font-mono text-[10px] font-bold flex items-center justify-center shrink-0">${idx + 1}</span>
-        <span class="truncate text-[#1E293B] dark:text-slate-300">${escapeHtml(item.text)}</span>
-      </div>
-      <span class="text-[11px] font-mono text-slate-400 shrink-0 num-ltr">${escapeHtml(item.date)}</span>
+  container.innerHTML = recentThree.map((item) => `
+    <div class="log-row">
+      <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(item.text)}</span>
+      <span class="num-ltr" style="font-size:0.66rem; color:var(--text-muted); flex-shrink:0;">${escapeHtml(item.date)}</span>
     </div>
   `).join('');
 }
 
 /**
  * ============================================================================
- * HYBRID LOCAL OPERATIONS (Immediate Frontend Execution without AI API Calls)
+ * HYBRID LOCAL OPERATIONS (Direct Frontend Execution)
  * ============================================================================
  */
 
 function openFxModal() {
   currentHybridContext = { type: 'fx' };
-  const titleEl = document.getElementById('hybrid-modal-title');
-  const fieldsEl = document.getElementById('hybrid-modal-fields');
-  titleEl.textContent = 'تحديث سعر الصرف الحي (SYP / USD)';
-  fieldsEl.innerHTML = `
+  document.getElementById('hybrid-modal-title').textContent = 'تعديل سعر الصرف الحي (SYP / USD)';
+  document.getElementById('hybrid-modal-fields').innerHTML = `
     <div>
-      <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">سعر صرف الدولار الواحد بالليرة السورية:</label>
-      <input id="hybrid-fx-input" type="number" step="any" min="1" required value="${Number(appState.fx_rate) || 14500}" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-sm font-mono num-ltr text-[#1E293B] dark:text-slate-100" />
+      <label class="field-label">سعر صرف الدولار الواحد بالليرة السورية:</label>
+      <input id="hybrid-fx-input" type="number" step="any" min="1" required value="${Number(appState.fx_rate) || 15000}" class="num-ltr" />
     </div>
   `;
   showHybridModal();
@@ -723,25 +661,23 @@ function openFxModal() {
 
 function openWalletModal() {
   currentHybridContext = { type: 'new_wallet' };
-  const titleEl = document.getElementById('hybrid-modal-title');
-  const fieldsEl = document.getElementById('hybrid-modal-fields');
-  titleEl.textContent = 'إضافة محفظة نقدية جديدة';
-  fieldsEl.innerHTML = `
+  document.getElementById('hybrid-modal-title').textContent = 'إضافة محفظة نقدية جديدة';
+  document.getElementById('hybrid-modal-fields').innerHTML = `
     <div>
-      <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">اسم المحفظة:</label>
-      <input id="hybrid-wallet-name" type="text" required placeholder="مثال: حساب بنك البركة" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs text-[#1E293B] dark:text-slate-100" />
+      <label class="field-label">اسم المحفظة:</label>
+      <input id="hybrid-wallet-name" type="text" required placeholder="مثال: كاش سوري أو محفظة الدولار" />
     </div>
-    <div class="grid grid-cols-2 gap-2">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
       <div>
-        <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">العملة:</label>
-        <select id="hybrid-wallet-currency" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs font-mono text-[#1E293B] dark:text-slate-100">
+        <label class="field-label">العملة:</label>
+        <select id="hybrid-wallet-currency">
           <option value="SYP">SYP (ليرة سورية)</option>
           <option value="USD">USD (دولار أمريكي)</option>
         </select>
       </div>
       <div>
-        <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">الرصيد الافتتاحي:</label>
-        <input id="hybrid-wallet-amount" type="number" step="any" required value="0" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs font-mono num-ltr text-[#1E293B] dark:text-slate-100" />
+        <label class="field-label">الرصيد الافتتاحي:</label>
+        <input id="hybrid-wallet-amount" type="number" step="any" required value="0" class="num-ltr" />
       </div>
     </div>
   `;
@@ -753,61 +689,65 @@ function openWalletAdjustModal(walletName, mode) {
   if (!wallet) return;
 
   currentHybridContext = { type: 'adjust_wallet', walletName, mode };
-  const titleEl = document.getElementById('hybrid-modal-title');
-  const fieldsEl = document.getElementById('hybrid-modal-fields');
-
   const modeLabels = {
-    deposit: `إيداع سريع في "${walletName}"`,
-    withdraw: `سحب سريع من "${walletName}"`,
-    set: `تعديل الرصيد المباشر لـ "${walletName}"`
+    deposit: `إيداع في "${walletName}"`,
+    withdraw: `سحب من "${walletName}"`,
+    set: `تعديل رصيد "${walletName}"`
   };
-  titleEl.textContent = modeLabels[mode] || 'تعديل المحفظة';
+  document.getElementById('hybrid-modal-title').textContent = modeLabels[mode] || 'تعديل المحفظة';
 
   const defaultVal = mode === 'set' ? Number(wallet.amount) || 0 : '';
   const amountLabel = mode === 'set'
     ? `الرصيد الجديد (${wallet.currency}):`
-    : `المبلغ المراد ${mode === 'deposit' ? 'إيداعه' : 'سحبه'} (${wallet.currency}):`;
+    : `المبلغ (${wallet.currency}):`;
 
-  fieldsEl.innerHTML = `
-    <div class="p-2.5 rounded-lg bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs flex justify-between">
-      <span class="text-slate-500">الرصيد الحالي:</span>
-      <strong class="num-ltr text-[#065F46] dark:text-[#10B981]">${formatNumber(wallet.amount, wallet.currency)}</strong>
+  document.getElementById('hybrid-modal-fields').innerHTML = `
+    <div class="log-row">
+      <span>الرصيد الحالي:</span>
+      <strong class="num-ltr" style="color:var(--emerald-primary);">${formatNumber(wallet.amount, wallet.currency)}</strong>
     </div>
     <div>
-      <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">${amountLabel}</label>
-      <input id="hybrid-adjust-amount" type="number" step="any" required value="${defaultVal}" placeholder="0" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-sm font-mono num-ltr text-[#1E293B] dark:text-slate-100" />
+      <label class="field-label">${amountLabel}</label>
+      <input id="hybrid-adjust-amount" type="number" step="any" required value="${defaultVal}" placeholder="0" class="num-ltr" />
     </div>
     <div>
-      <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">بيان الحركة (يُحفظ في السجل):</label>
-      <input id="hybrid-adjust-note" type="text" placeholder="عملية يدوية سريعة" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs text-[#1E293B] dark:text-slate-100" />
+      <label class="field-label">ملاحظة للسجل (اختياري):</label>
+      <input id="hybrid-adjust-note" type="text" placeholder="بيان العملية" />
     </div>
   `;
   showHybridModal();
 }
 
+function deleteWalletLocally(walletName) {
+  if (!appState.wallets[walletName]) return;
+  delete appState.wallets[walletName];
+  appendLog(`حذف محفظة "${walletName}" يدوياً`);
+  saveStateToStorage();
+  renderUI();
+  showToast(`تم حذف محفظة ${walletName}`);
+}
+
 function openProjectModal() {
   currentHybridContext = { type: 'new_project' };
-  const titleEl = document.getElementById('hybrid-modal-title');
-  const fieldsEl = document.getElementById('hybrid-modal-fields');
-  titleEl.textContent = 'إضافة مشروع جديد';
-  fieldsEl.innerHTML = `
+  document.getElementById('hybrid-modal-title').textContent = 'إضافة مشروع جديد';
+  document.getElementById('hybrid-modal-fields').innerHTML = `
     <div>
-      <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">اسم المشروع:</label>
-      <input id="hybrid-proj-name" type="text" required placeholder="مثال: تجارة القطع الإلكترونية" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs text-[#1E293B] dark:text-slate-100" />
+      <label class="field-label">اسم المشروع:</label>
+      <input id="hybrid-proj-name" type="text" required placeholder="اسم المشروع" />
     </div>
-    <div class="grid grid-cols-2 gap-2">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
       <div>
-        <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">صافي SYP:</label>
-        <input id="hybrid-proj-syp" type="number" step="any" value="0" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs font-mono num-ltr text-[#1E293B] dark:text-slate-100" />
+        <label class="field-label">صافي SYP:</label>
+        <input id="hybrid-proj-syp" type="number" step="any" value="0" class="num-ltr" />
       </div>
       <div>
-        <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">صافي USD:</label>
-        <input id="hybrid-proj-usd" type="number" step="any" value="0" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs font-mono num-ltr text-[#1E293B] dark:text-slate-100" />
+        <label class="field-label">صافي USD:</label>
+        <input id="hybrid-proj-usd" type="number" step="any" value="0" class="num-ltr" />
       </div>
     </div>
     <div>
-      <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">ملخص المشروع:</label>
-      <input id="hybrid-proj-summary" type="text" placeholder="أرباح التشغيل" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs text-[#1E293B] dark:text-slate-100" />
+      <label class="field-label">وصف مختصر:</label>
+      <input id="hybrid-proj-summary" type="text" placeholder="ملخص المشروع" />
     </div>
   `;
   showHybridModal();
@@ -818,63 +758,68 @@ function openProjectEditModal(projName) {
   if (!proj) return;
 
   currentHybridContext = { type: 'edit_project', projName };
-  const titleEl = document.getElementById('hybrid-modal-title');
-  const fieldsEl = document.getElementById('hybrid-modal-fields');
-  titleEl.textContent = `تعديل عوائد مشروع "${projName}"`;
-  fieldsEl.innerHTML = `
-    <div class="grid grid-cols-2 gap-2">
+  document.getElementById('hybrid-modal-title').textContent = `تعديل مشروع "${projName}"`;
+  document.getElementById('hybrid-modal-fields').innerHTML = `
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
       <div>
-        <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">صافي SYP:</label>
-        <input id="hybrid-proj-syp" type="number" step="any" required value="${Number(proj.netSYP) || 0}" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs font-mono num-ltr text-[#1E293B] dark:text-slate-100" />
+        <label class="field-label">صافي SYP:</label>
+        <input id="hybrid-proj-syp" type="number" step="any" required value="${Number(proj.netSYP) || 0}" class="num-ltr" />
       </div>
       <div>
-        <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">صافي USD:</label>
-        <input id="hybrid-proj-usd" type="number" step="any" required value="${Number(proj.netUSD) || 0}" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs font-mono num-ltr text-[#1E293B] dark:text-slate-100" />
+        <label class="field-label">صافي USD:</label>
+        <input id="hybrid-proj-usd" type="number" step="any" required value="${Number(proj.netUSD) || 0}" class="num-ltr" />
       </div>
     </div>
     <div>
-      <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">ملخص المشروع:</label>
-      <input id="hybrid-proj-summary" type="text" value="${escapeHtml(proj.summary || '')}" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs text-[#1E293B] dark:text-slate-100" />
+      <label class="field-label">وصف المشروع:</label>
+      <input id="hybrid-proj-summary" type="text" value="${escapeHtml(proj.summary || '')}" />
     </div>
   `;
   showHybridModal();
 }
 
+function deleteProjectLocally(projName) {
+  if (!appState.projects[projName]) return;
+  delete appState.projects[projName];
+  appendLog(`حذف مشروع "${projName}" يدوياً`);
+  saveStateToStorage();
+  renderUI();
+  showToast(`تم حذف مشروع ${projName}`);
+}
+
 function openDebtModal() {
   currentHybridContext = { type: 'new_debt' };
-  const titleEl = document.getElementById('hybrid-modal-title');
-  const fieldsEl = document.getElementById('hybrid-modal-fields');
-  titleEl.textContent = 'تسجيل دين أو ذمة مالية جديدة';
-  fieldsEl.innerHTML = `
-    <div class="grid grid-cols-2 gap-2">
+  document.getElementById('hybrid-modal-title').textContent = 'إضافة دين أو ذمة مالية';
+  document.getElementById('hybrid-modal-fields').innerHTML = `
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
       <div>
-        <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">الطرف / الشخص:</label>
-        <input id="hybrid-debt-person" type="text" required placeholder="اسم الشخص أو الجهة" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs text-[#1E293B] dark:text-slate-100" />
+        <label class="field-label">الاسم / الجهة:</label>
+        <input id="hybrid-debt-person" type="text" required placeholder="اسم الطرف" />
       </div>
       <div>
-        <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">نوع الذمة:</label>
-        <select id="hybrid-debt-type" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs text-[#1E293B] dark:text-slate-100">
+        <label class="field-label">نوع الذمة:</label>
+        <select id="hybrid-debt-type">
           <option value="علينا">علينا (التزام للدفع)</option>
           <option value="لنا">لنا (مستحق للقبض)</option>
         </select>
       </div>
     </div>
-    <div class="grid grid-cols-2 gap-2">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
       <div>
-        <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">المبلغ:</label>
-        <input id="hybrid-debt-amount" type="number" step="any" min="0.01" required placeholder="50" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs font-mono num-ltr text-[#1E293B] dark:text-slate-100" />
+        <label class="field-label">المبلغ:</label>
+        <input id="hybrid-debt-amount" type="number" step="any" min="0.01" required placeholder="0" class="num-ltr" />
       </div>
       <div>
-        <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">العملة:</label>
-        <select id="hybrid-debt-currency" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs font-mono text-[#1E293B] dark:text-slate-100">
+        <label class="field-label">العملة:</label>
+        <select id="hybrid-debt-currency">
           <option value="USD">USD</option>
           <option value="SYP">SYP</option>
         </select>
       </div>
     </div>
     <div>
-      <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">ملاحظة توضيحية:</label>
-      <input id="hybrid-debt-note" type="text" placeholder="مثال: أمانة بضاعة" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs text-[#1E293B] dark:text-slate-100" />
+      <label class="field-label">ملاحظة:</label>
+      <input id="hybrid-debt-note" type="text" placeholder="تفاصيل إضافية" />
     </div>
   `;
   showHybridModal();
@@ -885,60 +830,63 @@ function openDebtEditModal(debtId) {
   if (!debt) return;
 
   currentHybridContext = { type: 'edit_debt', debtId: Number(debtId) };
-  const titleEl = document.getElementById('hybrid-modal-title');
-  const fieldsEl = document.getElementById('hybrid-modal-fields');
-  titleEl.textContent = `تعديل ذمة "${debt.person}"`;
-  fieldsEl.innerHTML = `
-    <div class="grid grid-cols-2 gap-2">
+  document.getElementById('hybrid-modal-title').textContent = `تعديل ذمة "${debt.person}"`;
+  document.getElementById('hybrid-modal-fields').innerHTML = `
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
       <div>
-        <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">المبلغ المتبقي:</label>
-        <input id="hybrid-debt-amount" type="number" step="any" required value="${Number(debt.amount) || 0}" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs font-mono num-ltr text-[#1E293B] dark:text-slate-100" />
+        <label class="field-label">المبلغ المتبقي:</label>
+        <input id="hybrid-debt-amount" type="number" step="any" required value="${Number(debt.amount) || 0}" class="num-ltr" />
       </div>
       <div>
-        <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">نوع الذمة:</label>
-        <select id="hybrid-debt-type" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs text-[#1E293B] dark:text-slate-100">
+        <label class="field-label">نوع الذمة:</label>
+        <select id="hybrid-debt-type">
           <option value="علينا" ${debt.type === 'علينا' ? 'selected' : ''}>علينا</option>
           <option value="لنا" ${debt.type === 'لنا' ? 'selected' : ''}>لنا</option>
         </select>
       </div>
     </div>
     <div>
-      <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">ملاحظة:</label>
-      <input id="hybrid-debt-note" type="text" value="${escapeHtml(debt.note || '')}" class="w-full px-3 py-2 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border text-xs text-[#1E293B] dark:text-slate-100" />
+      <label class="field-label">ملاحظة:</label>
+      <input id="hybrid-debt-note" type="text" value="${escapeHtml(debt.note || '')}" />
     </div>
   `;
   showHybridModal();
 }
 
+function deleteDebtLocally(debtId) {
+  const idx = (appState.debts || []).findIndex((d) => Number(d.id) === Number(debtId));
+  if (idx === -1) return;
+  const removed = appState.debts.splice(idx, 1)[0];
+  appendLog(`حذف سجل دين "${removed.person}" يدوياً`);
+  saveStateToStorage();
+  renderUI();
+  showToast('تم حذف سجل الدين');
+}
+
 function showHybridModal() {
   const modal = document.getElementById('hybrid-action-modal');
-  if (!modal) return;
-  modal.classList.remove('hidden');
-  modal.classList.add('flex');
+  if (modal) modal.classList.remove('hidden');
 }
 
 function closeHybridModal() {
   const modal = document.getElementById('hybrid-action-modal');
-  if (!modal) return;
-  modal.classList.add('hidden');
-  modal.classList.remove('flex');
+  if (modal) modal.classList.add('hidden');
   currentHybridContext = null;
 }
 
 function submitHybridModal(event) {
   event.preventDefault();
   if (!currentHybridContext) return;
-
   const ctx = currentHybridContext;
 
   if (ctx.type === 'fx') {
     const newFx = Number(document.getElementById('hybrid-fx-input').value);
     if (newFx > 0) {
       appState.fx_rate = newFx;
-      appendLog(`تحديث يدوي لسعر الصرف إلى ${formatNumber(newFx)} ل.س/$`);
+      appendLog(`تحديث سعر الصرف إلى ${formatNumber(newFx)} ل.س/$`);
       saveStateToStorage();
       renderUI();
-      showToast('تم تحديث سعر الصرف محلياً');
+      showToast('تم تحديث سعر الصرف');
     }
   } else if (ctx.type === 'new_wallet') {
     const name = document.getElementById('hybrid-wallet-name').value.trim();
@@ -946,7 +894,7 @@ function submitHybridModal(event) {
     const amount = Number(document.getElementById('hybrid-wallet-amount').value) || 0;
     if (name) {
       appState.wallets[name] = { amount, currency };
-      appendLog(`إنشاء محفظة جديدة "${name}" برصيد ${formatNumber(amount, currency)}`);
+      appendLog(`إنشاء محفظة "${name}" برصيد ${formatNumber(amount, currency)}`);
       saveStateToStorage();
       renderUI();
       showToast(`تمت إضافة محفظة ${name}`);
@@ -964,10 +912,10 @@ function submitHybridModal(event) {
 
       wallet.amount = newAmt;
       const actionLabel = ctx.mode === 'deposit' ? 'إيداع في' : ctx.mode === 'withdraw' ? 'سحب من' : 'تعديل رصيد';
-      appendLog(`${actionLabel} محفظة "${ctx.walletName}" (${formatNumber(val, wallet.currency)})${note ? ' - ' + note : ''}`);
+      appendLog(`${actionLabel} "${ctx.walletName}" (${formatNumber(val, wallet.currency)})${note ? ' - ' + note : ''}`);
       saveStateToStorage();
       renderUI();
-      showToast('تم تحديث رصيد المحفظة فوراً');
+      showToast('تم تحديث رصيد المحفظة');
     }
   } else if (ctx.type === 'new_project') {
     const name = document.getElementById('hybrid-proj-name').value.trim();
@@ -976,7 +924,7 @@ function submitHybridModal(event) {
     const summary = document.getElementById('hybrid-proj-summary').value.trim() || 'مشروع نشط';
     if (name) {
       appState.projects[name] = { netSYP, netUSD, summary };
-      appendLog(`إضافة مشروع "${name}" (${summary})`);
+      appendLog(`إضافة مشروع "${name}"`);
       saveStateToStorage();
       renderUI();
       showToast(`تمت إضافة مشروع ${name}`);
@@ -987,11 +935,11 @@ function submitHybridModal(event) {
       proj.netSYP = Number(document.getElementById('hybrid-proj-syp').value) || 0;
       proj.netUSD = Number(document.getElementById('hybrid-proj-usd').value) || 0;
       proj.summary = document.getElementById('hybrid-proj-summary').value.trim() || proj.summary;
-      appendLog(`تعديل يدوي لعوائد مشروع "${ctx.projName}"`);
+      appendLog(`تعديل عوائد مشروع "${ctx.projName}"`);
       archiveClosedItems(appState);
       saveStateToStorage();
       renderUI();
-      showToast('تم تحديث المشروع محلياً');
+      showToast('تم تحديث المشروع');
     }
   } else if (ctx.type === 'new_debt') {
     const person = document.getElementById('hybrid-debt-person').value.trim();
@@ -1002,10 +950,10 @@ function submitHybridModal(event) {
     if (person && amount > 0) {
       const nextId = (appState.debts || []).reduce((max, d) => Math.max(max, Number(d.id) || 0), 0) + 1;
       appState.debts.push({ id: nextId, person, amount, currency, type, note });
-      appendLog(`تسجيل ذمة جديدة (${type}) لـ "${person}" بقيمة ${formatNumber(amount, currency)}`);
+      appendLog(`تسجيل ذمة (${type}) لـ "${person}" بقيمة ${formatNumber(amount, currency)}`);
       saveStateToStorage();
       renderUI();
-      showToast('تم تسجيل الذمة محلياً');
+      showToast('تم تسجيل الذمة');
     }
   } else if (ctx.type === 'edit_debt') {
     const debt = (appState.debts || []).find((d) => Number(d.id) === Number(ctx.debtId));
@@ -1017,16 +965,13 @@ function submitHybridModal(event) {
       archiveClosedItems(appState);
       saveStateToStorage();
       renderUI();
-      showToast('تم تحديث الذمة وتدقيق الأرشيف');
+      showToast('تم تحديث الذمة');
     }
   }
 
   closeHybridModal();
 }
 
-/**
- * Direct Hybrid Settlement & Archiving for Debts & Projects
- */
 function settleDebtLocally(debtId) {
   const idx = (appState.debts || []).findIndex((d) => Number(d.id) === Number(debtId));
   if (idx === -1) return;
@@ -1036,11 +981,11 @@ function settleDebtLocally(debtId) {
   debt.settledAmount = debt.amount;
   debt.amount = 0;
 
-  appendLog(`تسوية وإغلاق ذمة "${debt.person}" (${formatNumber(debt.settledAmount, debt.currency)}) ونقلها إلى الأرشيف`);
+  appendLog(`تسوية وإغلاق ذمة "${debt.person}" (${formatNumber(debt.settledAmount, debt.currency)})`);
   archiveClosedItems(appState);
   saveStateToStorage();
   renderUI();
-  showToast(`تمت تسوية ذمة ${debt.person} وأرشفتها محلياً`);
+  showToast(`تمت تسوية ذمة ${debt.person} وأرشفتها`);
 }
 
 function settleAndArchiveProject(projName) {
@@ -1048,61 +993,44 @@ function settleAndArchiveProject(projName) {
   if (!proj) return;
 
   proj.closed = true;
-  appendLog(`إغلاق وأرشفة مشروع "${projName}" بصافي (${formatNumber(proj.netSYP)} ل.س / ${formatNumber(proj.netUSD, 'USD')})`);
+  appendLog(`إغلاق وأرشفة مشروع "${projName}"`);
   archiveClosedItems(appState);
   saveStateToStorage();
   renderUI();
-  showToast(`تم إغلاق مشروع ${projName} ونقله للأرشيف`);
+  showToast(`تم إغلاق مشروع ${projName} وأرشفته`);
 }
 
 /**
  * ============================================================================
- * AI ASSISTANT BOTTOM SHEET & DEEPSEEK API INTEGRATION
+ * AI ASSISTANT BOTTOM SHEET & DEEPSEEK API
  * ============================================================================
  */
 
 function openAIBottomSheet() {
   const sheet = document.getElementById('ai-bottom-sheet');
-  if (!sheet) return;
-  sheet.classList.remove('hidden');
-  updatePayloadInspector();
+  if (sheet) sheet.classList.remove('hidden');
 }
 
 function closeAIBottomSheet() {
   const sheet = document.getElementById('ai-bottom-sheet');
-  if (!sheet) return;
-  sheet.classList.add('hidden');
+  if (sheet) sheet.classList.add('hidden');
 }
 
-function fillSamplePrompt(sampleText) {
-  const input = document.getElementById('ai-command-input');
-  if (!input) return;
-  input.value = sampleText;
-  input.focus();
-}
-
-function togglePromptInspector() {
-  const inspector = document.getElementById('ai-payload-inspector');
-  if (!inspector) return;
-  inspector.classList.toggle('hidden');
-  updatePayloadInspector();
-}
-
-function updatePayloadInspector() {
-  const inspector = document.getElementById('ai-payload-inspector');
-  if (!inspector) return;
-  const pruned = buildPrunedContextForAI(appState);
-  inspector.textContent = JSON.stringify(pruned, null, 2);
-}
-
-/**
- * Send Natural Language Command to DeepSeek API (or Intelligent Local Parser in Demo Mode)
- */
-async function sendCommandToAI(forceLocalSimulation = false) {
+async function sendCommandToAI() {
   const inputEl = document.getElementById('ai-command-input');
   const commandText = inputEl ? inputEl.value.trim() : '';
   if (!commandText) {
     showToast('يرجى كتابة الأمر المحاسبي أولاً');
+    return;
+  }
+
+  const apiKey = safeGetStorage(STORAGE_KEYS.API_KEY, '').trim();
+  const apiUrl = safeGetStorage(STORAGE_KEYS.API_URL, DEFAULT_API_URL).trim() || DEFAULT_API_URL;
+
+  if (!apiKey) {
+    closeAIBottomSheet();
+    openSettingsModal();
+    showToast('يرجى إدخال مفتاح DeepSeek API في الإعدادات أولاً');
     return;
   }
 
@@ -1111,156 +1039,51 @@ async function sendCommandToAI(forceLocalSimulation = false) {
   loadingEl.classList.remove('hidden');
   replyContainer.classList.add('hidden');
 
-  const apiKey = safeGetStorage(STORAGE_KEYS.API_KEY, '').trim();
-  const apiUrl = safeGetStorage(STORAGE_KEYS.API_URL, DEFAULT_API_URL).trim() || DEFAULT_API_URL;
-
   try {
-    let aiResult = null;
+    const systemPrompt = buildSystemPrompt(appState);
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: commandText }
+        ],
+        temperature: 0.1,
+        response_format: { type: 'json_object' }
+      })
+    });
 
-    if (!forceLocalSimulation && apiKey) {
-      const systemPrompt = buildSystemPrompt(appState);
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: commandText }
-          ],
-          temperature: 0.1,
-          response_format: { type: 'json_object' }
-        })
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`خطأ من خادم DeepSeek (${response.status}): ${errText.slice(0, 120)}`);
-      }
-
-      const data = await response.json();
-      const rawContent = data?.choices?.[0]?.message?.content || '{}';
-      aiResult = parseAIJsonSafely(rawContent);
-    } else {
-      // Intelligent Local Accounting Simulator when no API key is configured or simulation requested
-      await new Promise((r) => setTimeout(r, 450));
-      aiResult = simulateSmartAccountingAI(commandText, appState);
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`خطأ من خادم DeepSeek (${response.status}): ${errText.slice(0, 100)}`);
     }
 
+    const data = await response.json();
+    const rawContent = data?.choices?.[0]?.message?.content || '{}';
+    const cleaned = String(rawContent)
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+    const aiResult = JSON.parse(cleaned);
+
     if (!aiResult || !aiResult.updated_state) {
-      throw new Error('لم يُرجع النموذج كائن updated_state صالحاً.');
+      throw new Error('لم يُرجع الذكاء الاصطناعي كائن updated_state صالحاً.');
     }
 
     presentAIProposal(commandText, aiResult);
   } catch (err) {
-    showToast(err.message || 'تعذر الاتصال بالمساعد الذكي');
+    showToast(err.message || 'تعذر الاتصال بخدمة DeepSeek API');
   } finally {
     loadingEl.classList.add('hidden');
   }
 }
 
-function parseAIJsonSafely(rawContent) {
-  const cleaned = String(rawContent)
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/i, '')
-    .replace(/\s*```$/i, '')
-    .trim();
-  return JSON.parse(cleaned);
-}
-
-/**
- * Built-in Smart Accounting Interpreter for Local Testing & Offline Fallback
- */
-function simulateSmartAccountingAI(commandText, currentState) {
-  const nextState = buildPrunedContextForAI(currentState);
-  const replies = [];
-
-  // 1. Check for wallet deletion request (to demonstrate Validation Layer protection)
-  Object.keys(nextState.wallets).forEach((wName) => {
-    if ((commandText.includes('احذف') || commandText.includes('حذف')) && commandText.includes(wName)) {
-      delete nextState.wallets[wName];
-      replies.push(`تم حذف محفظة "${wName}" من الحالة المقترحة بناءً على طلبك.`);
-    }
-  });
-
-  // 2. Check for exchange rate update
-  const fxMatch = commandText.match(/(?:سعر الصرف|الصرف)(?:\s+إلى|\s+هو|\s*=\s*|\s+)(\d{3,6})/);
-  if (fxMatch) {
-    const newRate = Number(fxMatch[1]);
-    if (newRate > 0) {
-      nextState.fx_rate = newRate;
-      replies.push(`تم تحديث سعر الصرف إلى ${formatNumber(newRate)} ل.س/$.`);
-    }
-  }
-
-  // 3. Check for currency conversion (e.g. صرفنا 20 دولار من كاش دولار إلى كاش سوري)
-  const convertMatch = commandText.match(/صرفنا\s+(\d+(?:\.\d+)?)\s*دولار/);
-  if (convertMatch && nextState.wallets["كاش دولار"] && nextState.wallets["كاش سوري"]) {
-    const usdAmt = Number(convertMatch[1]);
-    const sypEquivalent = usdAmt * nextState.fx_rate;
-    nextState.wallets["كاش دولار"].amount = (Number(nextState.wallets["كاش دولار"].amount) || 0) - usdAmt;
-    nextState.wallets["كاش سوري"].amount = (Number(nextState.wallets["كاش سوري"].amount) || 0) + sypEquivalent;
-    replies.push(`تم خصم ${formatNumber(usdAmt, 'USD')} من "كاش دولار" وإيداع ما يعادلها (${formatNumber(sypEquivalent)} ل.س) في "كاش سوري" بسعر صرف ${formatNumber(nextState.fx_rate)}.`);
-  }
-
-  // 4. Check for Acrylic project revenue
-  if (commandText.includes('الأكريليك') && commandText.match(/(\d{4,9})/)) {
-    const numMatch = commandText.match(/(\d{4,9})/);
-    const amountSYP = Number(numMatch[1]);
-    if (!nextState.projects["أعمال الأكريليك"]) {
-      nextState.projects["أعمال الأكريليك"] = { netSYP: 0, netUSD: 0, summary: "أرباح الشهر" };
-    }
-    nextState.projects["أعمال الأكريليك"].netSYP = (Number(nextState.projects["أعمال الأكريليك"].netSYP) || 0) + amountSYP;
-    if (nextState.wallets["كاش سوري"]) {
-      nextState.wallets["كاش سوري"].amount = (Number(nextState.wallets["كاش سوري"].amount) || 0) + amountSYP;
-    }
-    replies.push(`تمت إضافة ${formatNumber(amountSYP)} ل.س إلى صافي أرباح مشروع "أعمال الأكريليك" وإيداع المبلغ في محفظة "كاش سوري".`);
-  }
-
-  // 5. Check for debt settlement to العطار
-  if (commandText.includes('العطار')) {
-    const numMatch = commandText.match(/(\d+(?:\.\d+)?)\s*(?:دولار|USD)/i);
-    const paidUsd = numMatch ? Number(numMatch[1]) : 0;
-    const debtItem = nextState.debts.find((d) => d.person.includes('العطار'));
-    if (debtItem && paidUsd > 0) {
-      debtItem.amount = Math.max(0, (Number(debtItem.amount) || 0) - paidUsd);
-      if (nextState.wallets["كاش دولار"]) {
-        nextState.wallets["كاش دولار"].amount = (Number(nextState.wallets["كاش دولار"].amount) || 0) - paidUsd;
-      }
-      replies.push(`تم سداد ${formatNumber(paidUsd, 'USD')} من ذمة "العطار" وخصمها من محفظة "كاش دولار" (المتبقي: ${formatNumber(debtItem.amount, 'USD')}).`);
-    }
-  }
-
-  // 6. Generic fallback arithmetic if another pattern was entered
-  if (replies.length === 0) {
-    const anyNum = commandText.match(/(\d+(?:\.\d+)?)/);
-    const isUSD = /دولار|USD|\$/i.test(commandText);
-    const isExpense = /دفعت|صرفنا|خصم|سحب|اشترينا/i.test(commandText);
-    if (anyNum) {
-      const val = Number(anyNum[1]);
-      const targetWallet = isUSD ? "كاش دولار" : "كاش سوري";
-      if (nextState.wallets[targetWallet]) {
-        const delta = isExpense ? -val : val;
-        nextState.wallets[targetWallet].amount = (Number(nextState.wallets[targetWallet].amount) || 0) + delta;
-        replies.push(`تم ${isExpense ? 'خصم' : 'إيداع'} مبلغ ${formatNumber(val, isUSD ? 'USD' : 'SYP')} في محفظة "${targetWallet}" وتحديث الرصيد.`);
-      }
-    } else {
-      replies.push(`تمت قراءة الأمر المحاسبي ("${commandText}") ومراجعة الأرصدة النشطة دون رصد تغييرات رقمية إضافية.`);
-    }
-  }
-
-  return {
-    reply: replies.join(' '),
-    updated_state: nextState
-  };
-}
-
-/**
- * Display AI Reply & Diff Summary inside Bottom Sheet
- */
 function presentAIProposal(commandText, aiResult) {
   const validation = validateState(appState, aiResult.updated_state);
   pendingAIProposal = {
@@ -1279,19 +1102,19 @@ function presentAIProposal(commandText, aiResult) {
 
   if (validation.requiresConfirmation) {
     badgeEl.textContent = 'يتطلب تأكيد الحماية';
-    badgeEl.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 font-semibold';
+    badgeEl.className = 'badge-pill amber';
   } else {
     badgeEl.textContent = 'تم التحقق بأمان';
-    badgeEl.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-[#065F46] dark:text-[#10B981] font-semibold';
+    badgeEl.className = 'badge-pill';
   }
 
   const allNotes = [...validation.warnings, ...validation.changes];
   if (allNotes.length === 0) {
-    diffPreviewEl.innerHTML = `<div class="text-slate-400">لا توجد فروقات جوهرية في الأرصدة عن الحالة الحالية.</div>`;
+    diffPreviewEl.innerHTML = `<div style="color:var(--text-muted);">لا توجد تغييرات في الأرصدة عن الحالة الحالية.</div>`;
   } else {
     diffPreviewEl.innerHTML = allNotes.map((line) => {
       const isWarn = line.startsWith('تنبيه:');
-      return `<div class="${isWarn ? 'text-amber-700 dark:text-amber-400 font-bold' : 'text-slate-600 dark:text-slate-300'}">• ${escapeHtml(line)}</div>`;
+      return `<div style="${isWarn ? 'color:var(--amber-text); font-weight:700;' : 'color:var(--text-main);'}">• ${escapeHtml(line)}</div>`;
     }).join('');
   }
 
@@ -1304,18 +1127,12 @@ function discardAIReply() {
   if (replyContainer) replyContainer.classList.add('hidden');
 }
 
-/**
- * Approve & Apply Button Handler:
- * 1. Runs State Diffing & Validation (`validateState`).
- * 2. If any wallet/project/debt deletion is detected, opens confirmation warning modal.
- * 3. Otherwise commits state, logs operation, archives closed items, saves to LocalStorage, and re-renders.
- */
 function approveAndApplyAIState() {
   if (!pendingAIProposal) return;
 
   const { validation } = pendingAIProposal;
   if (!validation.valid) {
-    showToast(validation.error || 'بيانات الحالة الجديدة غير صالحة');
+    showToast(validation.error || 'بيانات غير صالحة');
     return;
   }
 
@@ -1334,14 +1151,11 @@ function openValidationModal(warnings) {
 
   listEl.innerHTML = warnings.map((w) => `<div>• ${escapeHtml(w)}</div>`).join('');
   modal.classList.remove('hidden');
-  modal.classList.add('flex');
 }
 
 function closeValidationModal() {
   const modal = document.getElementById('validation-confirm-modal');
-  if (!modal) return;
-  modal.classList.add('hidden');
-  modal.classList.remove('flex');
+  if (modal) modal.classList.add('hidden');
 }
 
 function confirmApplyValidatedState() {
@@ -1349,9 +1163,6 @@ function confirmApplyValidatedState() {
   commitValidatedAIState();
 }
 
-/**
- * Final Commit Step after Validation Passes or User Confirms
- */
 function commitValidatedAIState() {
   if (!pendingAIProposal) return;
 
@@ -1365,29 +1176,21 @@ function commitValidatedAIState() {
     archive: preservedArchive
   });
 
-  // Append operation to logs
   appendLog(`${pendingAIProposal.commandText} — ${pendingAIProposal.reply}`);
-
-  // Auto-archive any zeroed/settled items
   archiveClosedItems(appState);
-
-  // Persist to LocalStorage
   saveStateToStorage();
-
-  // Refresh UI
   renderUI();
 
-  // Clean up bottom sheet state
   const inputEl = document.getElementById('ai-command-input');
   if (inputEl) inputEl.value = '';
   discardAIReply();
   closeAIBottomSheet();
-  showToast('تم اعتماد الحالة الجديدة وحفظها بنجاح');
+  showToast('تم اعتماد التعديلات وحفظها');
 }
 
 /**
  * ============================================================================
- * LOGS & ARCHIVE MODAL MANAGEMENT
+ * LOGS & ARCHIVE MODAL
  * ============================================================================
  */
 
@@ -1396,14 +1199,11 @@ function openLogsModal() {
   if (!modal) return;
   renderLogsAndArchiveModal();
   modal.classList.remove('hidden');
-  modal.classList.add('flex');
 }
 
 function closeLogsModal() {
   const modal = document.getElementById('logs-archive-modal');
-  if (!modal) return;
-  modal.classList.add('hidden');
-  modal.classList.remove('flex');
+  if (modal) modal.classList.add('hidden');
 }
 
 function switchLogsModalTab(tab) {
@@ -1415,13 +1215,13 @@ function switchLogsModalTab(tab) {
   if (tab === 'logs') {
     logsView.classList.remove('hidden');
     archiveView.classList.add('hidden');
-    btnLogs.className = 'pb-2.5 px-3 text-xs font-bold border-b-2 border-[#065F46] dark:border-[#10B981] text-[#065F46] dark:text-[#10B981]';
-    btnArchive.className = 'pb-2.5 px-3 text-xs font-bold border-b-2 border-transparent text-slate-500 dark:text-slate-400';
+    btnLogs.classList.add('active');
+    btnArchive.classList.remove('active');
   } else {
     logsView.classList.add('hidden');
     archiveView.classList.remove('hidden');
-    btnArchive.className = 'pb-2.5 px-3 text-xs font-bold border-b-2 border-[#065F46] dark:border-[#10B981] text-[#065F46] dark:text-[#10B981]';
-    btnLogs.className = 'pb-2.5 px-3 text-xs font-bold border-b-2 border-transparent text-slate-500 dark:text-slate-400';
+    btnArchive.classList.add('active');
+    btnLogs.classList.remove('active');
   }
 }
 
@@ -1432,19 +1232,17 @@ function renderLogsAndArchiveModal() {
 
   const logs = appState.logs || [];
   if (logs.length === 0) {
-    logsContainer.innerHTML = `<div class="p-4 text-center text-xs text-slate-400">لا توجد سجلات محفوظة.</div>`;
+    logsContainer.innerHTML = `<div class="empty-state-box">لا توجد عمليات مسجلة في السجل حتى الآن.</div>`;
   } else {
     logsContainer.innerHTML = logs.map((item, idx) => {
       const inContextWindow = idx < 3;
       return `
-        <div class="p-3 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border flex items-start justify-between gap-3">
-          <div class="space-y-1">
-            <div class="flex items-center gap-2">
-              <span class="text-xs font-semibold text-[#1E293B] dark:text-slate-200">${escapeHtml(item.text)}</span>
-              ${inContextWindow ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-[#065F46] dark:text-[#10B981] font-mono">ضمن سياق AI</span>` : ''}
-            </div>
-            <div class="text-[11px] font-mono text-slate-400 num-ltr">${escapeHtml(item.date)}</div>
+        <div class="log-row" style="flex-direction:column; align-items:stretch; gap:0.25rem;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
+            <span style="font-weight:600; color:var(--text-main);">${escapeHtml(item.text)}</span>
+            ${inContextWindow ? `<span class="badge-pill">سياق AI</span>` : ''}
           </div>
+          <span class="num-ltr" style="font-size:0.65rem; color:var(--text-muted);">${escapeHtml(item.date)}</span>
         </div>
       `;
     }).join('');
@@ -1452,30 +1250,29 @@ function renderLogsAndArchiveModal() {
 
   const archProjects = Object.entries(appState.archive?.projects || {});
   if (archProjects.length === 0) {
-    archProjContainer.innerHTML = `<div class="p-3 rounded-lg bg-[#F8FAF9] dark:bg-[#0A0F0D] text-xs text-slate-400">لا توجد مشاريع مؤرشفة بعد.</div>`;
+    archProjContainer.innerHTML = `<div class="empty-state-box" style="padding:0.85rem;">لا توجد مشاريع مؤرشفة.</div>`;
   } else {
     archProjContainer.innerHTML = archProjects.map(([name, p]) => `
-      <div class="p-3 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border flex items-center justify-between">
+      <div class="log-row">
         <div>
-          <div class="text-xs font-bold text-[#1E293B] dark:text-slate-200">${escapeHtml(name)}</div>
-          <div class="text-[11px] text-slate-400">${escapeHtml(p.summary || '')} | أُرشف: ${escapeHtml(p.archivedAt || '-')}</div>
+          <div style="font-weight:700;">${escapeHtml(name)}</div>
+          <div style="font-size:0.68rem; color:var(--text-muted);">${escapeHtml(p.summary || '')} | أُرشف: ${escapeHtml(p.archivedAt || '-')}</div>
         </div>
-        <button type="button" onclick="restoreArchivedProject('${escapeHtml(name)}')" class="px-2.5 py-1 rounded hairline-border text-[11px] font-semibold text-[#065F46] dark:text-[#10B981]">استعادة للنشط</button>
+        <button type="button" onclick="restoreArchivedProject('${escapeHtml(name)}')" class="btn-secondary" style="font-size:0.68rem; padding:0.3rem 0.55rem;">استعادة</button>
       </div>
     `).join('');
   }
 
   const archDebts = appState.archive?.debts || [];
   if (archDebts.length === 0) {
-    archDebtsContainer.innerHTML = `<div class="p-3 rounded-lg bg-[#F8FAF9] dark:bg-[#0A0F0D] text-xs text-slate-400">لا توجد ديون مسددة في الأرشيف بعد.</div>`;
+    archDebtsContainer.innerHTML = `<div class="empty-state-box" style="padding:0.85rem;">لا توجد ديون مسددة في الأرشيف.</div>`;
   } else {
-    archDebtsContainer.innerHTML = archDebts.map((d, index) => `
-      <div class="p-3 rounded-xl bg-[#F8FAF9] dark:bg-[#0A0F0D] hairline-border flex items-center justify-between">
+    archDebtsContainer.innerHTML = archDebts.map((d) => `
+      <div class="log-row">
         <div>
-          <div class="text-xs font-bold text-[#1E293B] dark:text-slate-200">${escapeHtml(d.person)} (${escapeHtml(d.type || 'علينا')})</div>
-          <div class="text-[11px] text-slate-400">القيمة المسددة: ${formatNumber(d.settledAmount || d.amount, d.currency || 'USD')} | أُرشف: ${escapeHtml(d.archivedAt || '-')}</div>
+          <div style="font-weight:700;">${escapeHtml(d.person)} (${escapeHtml(d.type || 'علينا')})</div>
+          <div style="font-size:0.68rem; color:var(--text-muted);">المسدد: ${formatNumber(d.settledAmount || d.amount, d.currency || 'USD')} | ${escapeHtml(d.archivedAt || '-')}</div>
         </div>
-        <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">#${index + 1}</span>
       </div>
     `).join('');
   }
@@ -1490,16 +1287,25 @@ function restoreArchivedProject(projName) {
   delete restored.archivedAt;
   appState.projects[projName] = restored;
   delete appState.archive.projects[projName];
-  appendLog(`استعادة مشروع "${projName}" من الأرشيف إلى الحالة النشطة`);
+  appendLog(`استعادة مشروع "${projName}" من الأرشيف`);
   saveStateToStorage();
   renderUI();
   renderLogsAndArchiveModal();
   showToast(`تمت استعادة مشروع ${projName}`);
 }
 
+function clearLogsAndArchiveLocally() {
+  appState.logs = [];
+  appState.archive = { projects: {}, debts: [] };
+  saveStateToStorage();
+  renderUI();
+  renderLogsAndArchiveModal();
+  showToast('تم مسح السجلات والأرشيف');
+}
+
 /**
  * ============================================================================
- * SETTINGS MODAL (API Key & State Reset)
+ * SETTINGS & PERMANENT FACTORY DATA WIPE
  * ============================================================================
  */
 
@@ -1513,14 +1319,11 @@ function openSettingsModal() {
   if (urlInput) urlInput.value = safeGetStorage(STORAGE_KEYS.API_URL, DEFAULT_API_URL);
 
   modal.classList.remove('hidden');
-  modal.classList.add('flex');
 }
 
 function closeSettingsModal() {
   const modal = document.getElementById('settings-modal');
-  if (!modal) return;
-  modal.classList.add('hidden');
-  modal.classList.remove('flex');
+  if (modal) modal.classList.add('hidden');
 }
 
 function saveSettings() {
@@ -1531,18 +1334,30 @@ function saveSettings() {
   if (urlInput) safeSetStorage(STORAGE_KEYS.API_URL, urlInput.value.trim() || DEFAULT_API_URL);
 
   closeSettingsModal();
-  showToast('تم حفظ إعدادات DeepSeek API محلياً');
+  showToast('تم حفظ إعدادات الاتصال');
 }
 
-function resetToDefaultState() {
-  appState = getInitialDefaultState();
+function openWipeConfirmModal() {
+  closeSettingsModal();
+  const modal = document.getElementById('wipe-confirm-modal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeWipeConfirmModal() {
+  const modal = document.getElementById('wipe-confirm-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function executePermanentDataWipe() {
+  safeRemoveStorage(STORAGE_KEYS.LEGACY_V1);
+  safeRemoveStorage(STORAGE_KEYS.STATE);
+  appState = getInitialCleanState();
   saveStateToStorage();
   renderUI();
-  closeSettingsModal();
-  showToast('تمت استعادة الحالة الافتراضية للتطبيق');
+  closeWipeConfirmModal();
+  showToast('تم حذف وتصفير كافة البيانات نهائياً');
 }
 
-// Expose handlers globally for HTML attributes & initialize on DOM load
 Object.assign(window, {
   initApp,
   toggleTheme,
@@ -1550,18 +1365,19 @@ Object.assign(window, {
   openFxModal,
   openWalletModal,
   openWalletAdjustModal,
+  deleteWalletLocally,
   openProjectModal,
   openProjectEditModal,
+  deleteProjectLocally,
   openDebtModal,
   openDebtEditModal,
+  deleteDebtLocally,
   closeHybridModal,
   submitHybridModal,
   settleDebtLocally,
   settleAndArchiveProject,
   openAIBottomSheet,
   closeAIBottomSheet,
-  fillSamplePrompt,
-  togglePromptInspector,
   sendCommandToAI,
   discardAIReply,
   approveAndApplyAIState,
@@ -1571,10 +1387,13 @@ Object.assign(window, {
   closeLogsModal,
   switchLogsModalTab,
   restoreArchivedProject,
+  clearLogsAndArchiveLocally,
   openSettingsModal,
   closeSettingsModal,
   saveSettings,
-  resetToDefaultState
+  openWipeConfirmModal,
+  closeWipeConfirmModal,
+  executePermanentDataWipe
 });
 
 window.addEventListener('DOMContentLoaded', initApp);

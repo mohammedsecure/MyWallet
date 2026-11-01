@@ -1,0 +1,763 @@
+/* ==========================================================================
+   My Wallet v1.1 (محفظتي) - Complete Standalone Offline Design System
+   Minimalist Emerald Theme + Dark OLED Mode + Full Mobile Responsiveness
+   ========================================================================== */
+
+:root {
+  --font-arabic: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans Arabic", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* Safe Area Insets for Android & iOS Notches / Gesture Bars */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+
+  /* Light Mode Palette */
+  --bg-page: #F8FAF9;
+  --bg-card: #FFFFFF;
+  --bg-subtle: #F1F5F3;
+  --border-hairline: #E2E8F0;
+  --text-main: #1E293B;
+  --text-muted: #64748B;
+  --text-subtle: #94A3B8;
+
+  --emerald-primary: #065F46;
+  --emerald-hover: #047857;
+  --emerald-accent: #10B981;
+  --emerald-soft: rgba(6, 95, 70, 0.08);
+  --emerald-border: rgba(6, 95, 70, 0.22);
+
+  --amber-text: #B45309;
+  --amber-soft: rgba(245, 158, 11, 0.12);
+  --amber-border: rgba(245, 158, 11, 0.3);
+
+  --rose-text: #BE123C;
+  --rose-soft: rgba(225, 29, 72, 0.08);
+  --rose-border: rgba(225, 29, 72, 0.25);
+}
+
+html.dark {
+  /* Dark OLED Mode Palette */
+  --bg-page: #0A0F0D;
+  --bg-card: #121A16;
+  --bg-subtle: #18231E;
+  --border-hairline: #1F2D27;
+  --text-main: #F1F5F9;
+  --text-muted: #94A3B8;
+  --text-subtle: #64748B;
+
+  --emerald-primary: #10B981;
+  --emerald-hover: #34D399;
+  --emerald-accent: #10B981;
+  --emerald-soft: rgba(16, 185, 129, 0.12);
+  --emerald-border: rgba(16, 185, 129, 0.28);
+
+  --amber-text: #FBBF24;
+  --amber-soft: rgba(251, 191, 36, 0.14);
+  --amber-border: rgba(251, 191, 36, 0.32);
+
+  --rose-text: #FB7185;
+  --rose-soft: rgba(251, 113, 133, 0.12);
+  --rose-border: rgba(251, 113, 133, 0.3);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  font-family: var(--font-arabic);
+  background-color: var(--bg-page);
+  color: var(--text-main);
+  line-height: 1.5;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+}
+
+.hidden {
+  display: none !important;
+}
+
+.num-ltr {
+  direction: ltr;
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   Responsive Sticky Header (Never clips or overflows on small phones)
+   ========================================================================== */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  width: 100%;
+  background-color: var(--bg-page);
+  border-bottom: 1px solid var(--border-hairline);
+  padding-top: calc(0.6rem + var(--sat));
+  padding-bottom: 0.6rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+.header-inner {
+  max-width: 48rem;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.brand-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.brand-logo {
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 0.55rem;
+  background-color: #065F46;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+html.dark .brand-logo {
+  background-color: #121A16;
+  color: #10B981;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.brand-title-wrap {
+  min-width: 0;
+}
+
+.brand-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.brand-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--text-main);
+}
+
+.brand-version {
+  font-size: 0.625rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.3rem;
+  background-color: var(--emerald-soft);
+  color: var(--emerald-primary);
+  white-space: nowrap;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.fx-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.4rem 0.55rem;
+  height: 2.15rem;
+  border-radius: 0.55rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-hairline);
+  color: var(--text-main);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s ease;
+}
+
+.fx-pill-btn:hover {
+  border-color: var(--emerald-primary);
+}
+
+.icon-action-btn {
+  position: relative;
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 0.55rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-hairline);
+  color: var(--text-main);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.icon-action-btn:hover {
+  border-color: var(--emerald-primary);
+  color: var(--emerald-primary);
+}
+
+.badge-counter {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 3px;
+  border-radius: 9999px;
+  background-color: var(--emerald-primary);
+  color: #FFFFFF;
+  font-size: 0.6rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+html.dark .badge-counter {
+  color: #0A0F0D;
+}
+
+/* ==========================================================================
+   Main Content & Summary Grid
+   ========================================================================== */
+.app-main {
+  max-width: 48rem;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0.85rem 0.75rem calc(6.5rem + var(--sab));
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  flex: 1;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+@media (min-width: 640px) {
+  .summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.summary-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-hairline);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.summary-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.summary-card-val {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   Navigation Tabs
+   ========================================================================== */
+.tabs-bar {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-hairline);
+  border-radius: 0.75rem;
+  padding: 0.25rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.tab-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 0.55rem;
+  padding: 0.55rem 0.35rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.tab-btn.active {
+  background-color: #065F46;
+  color: #FFFFFF;
+}
+
+html.dark .tab-btn.active {
+  background-color: #10B981;
+  color: #0A0F0D;
+}
+
+/* ==========================================================================
+   Section Headers & Primary Buttons
+   ========================================================================== */
+.section-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.section-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.section-subtitle {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.btn-emerald {
+  background-color: #065F46;
+  color: #FFFFFF;
+  border: 1px solid transparent;
+  border-radius: 0.6rem;
+  padding: 0.5rem 0.85rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease;
+}
+
+.btn-emerald:hover {
+  background-color: #047857;
+}
+
+html.dark .btn-emerald {
+  background-color: #10B981;
+  color: #0A0F0D;
+}
+
+html.dark .btn-emerald:hover {
+  background-color: #34D399;
+}
+
+.btn-secondary {
+  background-color: var(--bg-subtle);
+  color: var(--text-main);
+  border: 1px solid var(--border-hairline);
+  border-radius: 0.6rem;
+  padding: 0.45rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-secondary:hover {
+  border-color: var(--emerald-primary);
+  color: var(--emerald-primary);
+}
+
+.btn-danger {
+  background-color: var(--rose-soft);
+  color: var(--rose-text);
+  border: 1px solid var(--rose-border);
+  border-radius: 0.6rem;
+  padding: 0.5rem 0.85rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.btn-danger:hover {
+  background-color: rgba(225, 29, 72, 0.18);
+}
+
+/* ==========================================================================
+   Wallet, Project & Debt Cards (Harmonious Minimalist Emerald Styling)
+   ========================================================================== */
+.cards-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+@media (min-width: 600px) {
+  .cards-grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.item-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-hairline);
+  border-radius: 0.85rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  transition: border-color 0.15s ease;
+}
+
+.item-card:hover {
+  border-color: var(--emerald-border);
+}
+
+.card-top-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.wallet-icon-box {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.6rem;
+  background-color: var(--emerald-soft);
+  border: 1px solid var(--emerald-border);
+  color: var(--emerald-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.card-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.card-subtext {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.card-balance {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+}
+
+/* Harmonious Wallet Action Buttons (Deposit / Withdraw / Edit / Delete) */
+.wallet-actions-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto auto;
+  gap: 0.45rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-hairline);
+}
+
+.btn-wallet-deposit {
+  background-color: var(--emerald-soft);
+  color: var(--emerald-primary);
+  border: 1px solid var(--emerald-border);
+  border-radius: 0.55rem;
+  padding: 0.45rem 0.6rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-wallet-deposit:hover {
+  background-color: #065F46;
+  color: #FFFFFF;
+}
+
+html.dark .btn-wallet-deposit:hover {
+  background-color: #10B981;
+  color: #0A0F0D;
+}
+
+.btn-wallet-withdraw {
+  background-color: var(--bg-subtle);
+  color: var(--text-main);
+  border: 1px solid var(--border-hairline);
+  border-radius: 0.55rem;
+  padding: 0.45rem 0.6rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-wallet-withdraw:hover {
+  border-color: var(--rose-border);
+  color: var(--rose-text);
+  background-color: var(--rose-soft);
+}
+
+.btn-wallet-icon {
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 0.55rem;
+  background-color: transparent;
+  border: 1px solid var(--border-hairline);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-wallet-icon:hover {
+  border-color: var(--emerald-primary);
+  color: var(--emerald-primary);
+}
+
+.btn-wallet-icon.danger:hover {
+  border-color: var(--rose-border);
+  color: var(--rose-text);
+  background-color: var(--rose-soft);
+}
+
+.empty-state-box {
+  background-color: var(--bg-card);
+  border: 1px dashed var(--border-hairline);
+  border-radius: 0.85rem;
+  padding: 1.5rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.badge-pill {
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  background-color: var(--emerald-soft);
+  color: var(--emerald-primary);
+}
+
+.badge-pill.amber {
+  background-color: var(--amber-soft);
+  color: var(--amber-text);
+  font-family: var(--font-arabic);
+}
+
+/* ==========================================================================
+   Context Strip & Log Rows
+   ========================================================================== */
+.log-row {
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-hairline);
+  border-radius: 0.55rem;
+  padding: 0.5rem 0.65rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+}
+
+/* ==========================================================================
+   Floating Action Button (FAB) & Modals
+   ========================================================================== */
+.fab-wrapper {
+  position: fixed;
+  z-index: 35;
+  bottom: calc(1rem + var(--sab));
+  left: calc(1rem + var(--sal));
+}
+
+.btn-fab-main {
+  background-color: #065F46;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 9999px;
+  padding: 0.8rem 1.15rem;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(6, 95, 70, 0.38);
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.btn-fab-main:hover {
+  background-color: #047857;
+  transform: translateY(-2px);
+}
+
+html.dark .btn-fab-main {
+  background-color: #10B981;
+  color: #0A0F0D;
+  box-shadow: 0 8px 22px rgba(16, 185, 129, 0.28);
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background-color: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.bottom-sheet-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 46;
+  max-width: 48rem;
+  margin: 0 auto;
+  background-color: var(--bg-card);
+  border-top: 1px solid var(--border-hairline);
+  border-top-left-radius: 1.25rem;
+  border-top-right-radius: 1.25rem;
+  padding-bottom: calc(1rem + var(--sab));
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.modal-card {
+  position: relative;
+  width: 100%;
+  max-width: 28rem;
+  max-height: 88vh;
+  overflow-y: auto;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-hairline);
+  border-radius: 1rem;
+  padding: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.4);
+}
+
+input, textarea, select {
+  width: 100%;
+  background-color: var(--bg-page);
+  border: 1px solid var(--border-hairline);
+  color: var(--text-main);
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: var(--emerald-primary);
+}
+
+.field-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 0.3rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
