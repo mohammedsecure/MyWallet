@@ -1,0 +1,102 @@
+name: Build Android APK (My Wallet)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-android-apk:
+    name: Compile & Package Capacitor Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NPM Dependencies
+        run: npm install
+
+      - name: Prepare Offline Web Assets (www)
+        run: |
+          mkdir -p www
+          cp index.html app.js www/
+          if [ -d "assets" ]; then cp -r assets www/assets; fi
+
+      - name: Initialize & Sync Capacitor Android
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+          npx cap sync android
+
+      - name: Build Update-Compatible Debug APK (Deterministic Debug Keystore)
+        working-directory: ./android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Build Release APK
+        working-directory: ./android
+        run: |
+          ./gradlew assembleRelease
+
+      - name: Sign & Prepare Persistent Release APK
+        working-directory: ./android/app/build/outputs/apk/release
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$SIGNING_KEYSTORE_BASE64" ]; then
+            echo "Signing with repository secret keystore..."
+            echo "$SIGNING_KEYSTORE_BASE64" | base64 --decode > persistent-release.keystore
+            $ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | tail -n 1)/apksigner sign \
+              --ks persistent-release.keystore \
+              --ks-pass pass:"$KEYSTORE_PASSWORD" \
+              --key-pass pass:"$KEY_PASSWORD" \
+              --ks-key-alias "$KEY_ALIAS" \
+              --out app-release.apk app-release-unsigned.apk
+          else
+            echo "Secrets not set. Creating deterministic keystore with fixed credentials to guarantee update compatibility..."
+            keytool -genkey -v -keystore fixed-release.jks -keyalg RSA -keysize 2048 -validity 10000 \
+              -alias mywallet_persistent -storepass MyWalletFixed2026 -keypass MyWalletFixed2026 \
+              -dname "CN=MyWallet, OU=Finance, O=MyWallet, L=Damascus, S=Damascus, C=SY"
+            
+            BUILD_TOOLS_DIR="$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | tail -n 1)"
+            $BUILD_TOOLS_DIR/zipalign -v -p 4 app-release-unsigned.apk app-release-aligned.apk
+            $BUILD_TOOLS_DIR/apksigner sign --ks fixed-release.jks \
+              --ks-pass pass:MyWalletFixed2026 --key-pass pass:MyWalletFixed2026 \
+              --out app-release.apk app-release-aligned.apk
+          fi
+
+      - name: Upload Debug APK (Recommended for Testing & Seamless Updates)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error

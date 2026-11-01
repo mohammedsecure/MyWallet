@@ -1,0 +1,22 @@
+{
+  "name": "my-wallet",
+  "version": "1.0.0",
+  "description": "My Wallet (محفظتي) - AI-Powered Personal Finance & Hybrid Accounting SPA packaged with Capacitor.js",
+  "main": "app.js",
+  "scripts": {
+    "prepare:www": "mkdir -p www && cp index.html app.js www/ && cp -r assets www/assets",
+    "cap:init": "npx cap init \"My Wallet\" com.mywallet.app --web-dir www",
+    "cap:add:android": "npx cap add android",
+    "cap:sync": "npm run prepare:www && npx cap sync android",
+    "build:android": "npm run cap:sync && cd android && ./gradlew assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/core": "^6.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2"
+  },
+  "author": "My Wallet Architecture Team",
+  "license": "MIT"
+}
