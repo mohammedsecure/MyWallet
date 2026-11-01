@@ -21,14 +21,11 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Setup Java JDK 17 for Android Gradle Plugin
+      - name: Setup Java JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
 
       - name: Install NPM Dependencies
         run: npm install
@@ -54,7 +51,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload Debug APK (Ready to install)
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
