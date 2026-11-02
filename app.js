@@ -1,6 +1,10 @@
 /**
- * My Wallet v1.2 (محفظتي) - Clean Slate Hybrid Financial Architecture
- * Enhanced DeepSeek System Prompt + Resilient Schema Normalization + Accurate Diffing
+ * My Wallet v1.3 (محفظتي)
+ * - Complete Currency Separation (No * fx or / fx merging in cards/summaries)
+ * - 2 Top Summary Cards Only (Total Cash SYP & Total Cash USD)
+ * - Dedicated Independent Tabs (Wallets | Projects & Monthly Flow | Debts)
+ * - Live Instant FX Calculator inside Exchange Rate Modal
+ * - Monthly Financial Flow System (monthly_flow: income & expenses + Archive Month)
  */
 
 const STORAGE_KEYS = {
@@ -22,10 +26,23 @@ function getInitialCleanState() {
     wallets: {},
     projects: {},
     debts: [],
+    monthly_flow: {
+      income: {
+        totalSYP: 0,
+        totalUSD: 0,
+        items: []
+      },
+      expenses: {
+        totalSYP: 0,
+        totalUSD: 0,
+        items: []
+      }
+    },
     logs: [],
     archive: {
       projects: {},
-      debts: []
+      debts: [],
+      monthly_flow: []
     }
   };
 }
@@ -89,9 +106,6 @@ function escapeHtml(text) {
     .replace(/'/g, '&#039;');
 }
 
-/**
- * Helper to normalize currency strings returned by AI or user
- */
 function normalizeCurrencyCode(rawCur, hintText = '', fallback = 'SYP') {
   const str = String(rawCur || '').trim().toUpperCase();
   if (str === 'USD' || str === '$' || str.includes('دولار') || str.includes('DOLLAR')) {
@@ -110,9 +124,6 @@ function normalizeCurrencyCode(rawCur, hintText = '', fallback = 'SYP') {
   return fallback;
 }
 
-/**
- * Helper to normalize debt direction ("لنا" vs "علينا")
- */
 function normalizeDebtType(rawType) {
   const str = String(rawType || '').trim();
   if (str === 'لنا' || str.includes('لنا') || str.includes('مستحق لنا') || str.includes('مدين لنا')) {
@@ -122,20 +133,118 @@ function normalizeDebtType(rawType) {
 }
 
 /**
+ * Helper to normalize a branch of `monthly_flow` (`income` or `expenses`)
+ */
+function normalizeFlowBranch(rawBranch) {
+  const result = { totalSYP: 0, totalUSD: 0, items: [] };
+  if (!rawBranch) return result;
+
+  if (typeof rawBranch === 'number') {
+    result.totalSYP = Number(rawBranch) || 0;
+    return result;
+  }
+
+  if (Array.isArray(rawBranch)) {
+    rawBranch.forEach((item, idx) => {
+      if (!item || typeof item !== 'object') return;
+      const amt = Number(item.amount ?? item.value ?? 0) || 0;
+      const cur = normalizeCurrencyCode(item.currency, item.title || item.note || '', 'SYP');
+      const title = String(item.title ?? item.name ?? item.category ?? item.note ?? 'بند مالي').trim();
+      if (amt > 0) {
+        result.items.push({
+          id: Number(item.id) || (idx + 1),
+          title,
+          amount: amt,
+          currency: cur,
+          date: String(item.date || formatTimestamp())
+        });
+      }
+    });
+  } else if (typeof rawBranch === 'object') {
+    let explicitSYP = Number(rawBranch.totalSYP ?? rawBranch.SYP ?? rawBranch.syp ?? 0) || 0;
+    let explicitUSD = Number(rawBranch.totalUSD ?? rawBranch.USD ?? rawBranch.usd ?? 0) || 0;
+
+    if (Array.isArray(rawBranch.items)) {
+      rawBranch.items.forEach((item, idx) => {
+        if (!item || typeof item !== 'object') return;
+        const amt = Number(item.amount ?? item.value ?? 0) || 0;
+        const cur = normalizeCurrencyCode(item.currency, item.title || item.note || '', 'SYP');
+        const title = String(item.title ?? item.name ?? item.category ?? item.note ?? 'بند مالي').trim();
+        if (amt > 0) {
+          result.items.push({
+            id: Number(item.id) || (idx + 1),
+            title,
+            amount: amt,
+            currency: cur,
+            date: String(item.date || formatTimestamp())
+          });
+        }
+      });
+    } else {
+      // Support key-value map e.g. { "مصاريف الغرانولا": { amount: 50000, currency: "SYP" } }
+      let idx = 1;
+      Object.entries(rawBranch).forEach(([k, v]) => {
+        if (['totalSYP', 'totalUSD', 'SYP', 'USD', 'syp', 'usd', 'items'].includes(k)) return;
+        if (typeof v === 'number' && v > 0) {
+          const cur = normalizeCurrencyCode('', k, 'SYP');
+          result.items.push({
+            id: idx++,
+            title: k,
+            amount: v,
+            currency: cur,
+            date: formatTimestamp()
+          });
+        } else if (v && typeof v === 'object') {
+          const amt = Number(v.amount ?? v.value ?? 0) || 0;
+          const cur = normalizeCurrencyCode(v.currency, k, 'SYP');
+          if (amt > 0) {
+            result.items.push({
+              id: idx++,
+              title: String(v.title || k).trim(),
+              amount: amt,
+              currency: cur,
+              date: String(v.date || formatTimestamp())
+            });
+          }
+        }
+      });
+    }
+
+    const sumItemsSYP = result.items
+      .filter((i) => i.currency === 'SYP')
+      .reduce((acc, i) => acc + (Number(i.amount) || 0), 0);
+    const sumItemsUSD = result.items
+      .filter((i) => i.currency === 'USD')
+      .reduce((acc, i) => acc + (Number(i.amount) || 0), 0);
+
+    result.totalSYP = Math.max(explicitSYP, sumItemsSYP);
+    result.totalUSD = Math.max(explicitUSD, sumItemsUSD);
+    return result;
+  }
+
+  result.totalSYP = result.items
+    .filter((i) => i.currency === 'SYP')
+    .reduce((acc, i) => acc + (Number(i.amount) || 0), 0);
+  result.totalUSD = result.items
+    .filter((i) => i.currency === 'USD')
+    .reduce((acc, i) => acc + (Number(i.amount) || 0), 0);
+
+  return result;
+}
+
+/**
  * Resilient State Schema Normalizer
- * Ensures that even when starting from an empty state, any JSON structure returned by DeepSeek
- * is accurately mapped to the exact keys expected by the UI (`amount`, `currency`, `person`, `type`, `netSYP`, `netUSD`).
  */
 function normalizeStateSchema(raw) {
   const clean = getInitialCleanState();
   if (!raw || typeof raw !== 'object') return clean;
 
-  // 1. Normalize fx_rate
+  // 1. fx_rate
   const fxRate = Number(raw.fx_rate ?? raw.exchange_rate ?? raw.rate) > 0
     ? Number(raw.fx_rate ?? raw.exchange_rate ?? raw.rate)
     : (Number(appState?.fx_rate) > 0 ? Number(appState.fx_rate) : clean.fx_rate);
 
-  // 2. Normalize wallets
+  // 2. wallets
   const normalizedWallets = {};
   if (raw.wallets && typeof raw.wallets === 'object' && !Array.isArray(raw.wallets)) {
     Object.entries(raw.wallets).forEach(([wName, wData]) => {
@@ -147,11 +256,9 @@ function normalizeStateSchema(raw) {
           currency: normalizeCurrencyCode('', cleanName, 'SYP')
         };
       } else if (wData && typeof wData === 'object') {
-        const amt = Number(wData.amount ?? wData.balance ?? wData.value ?? wData.total ?? 0) || 0;
-        const cur = normalizeCurrencyCode(wData.currency ?? wData.unit, cleanName, 'SYP');
         normalizedWallets[cleanName] = {
-          amount: amt,
-          currency: cur
+          amount: Number(wData.amount ?? wData.balance ?? wData.value ?? wData.total ?? 0) || 0,
+          currency: normalizeCurrencyCode(wData.currency ?? wData.unit, cleanName, 'SYP')
         };
       }
     });
@@ -167,7 +274,7 @@ function normalizeStateSchema(raw) {
     });
   }
 
-  // 3. Normalize projects
+  // 3. projects
   const normalizedProjects = {};
   if (raw.projects && typeof raw.projects === 'object' && !Array.isArray(raw.projects)) {
     Object.entries(raw.projects).forEach(([pName, pData]) => {
@@ -202,7 +309,7 @@ function normalizeStateSchema(raw) {
     });
   }
 
-  // 4. Normalize debts (Supports both Array and Object map formats)
+  // 4. debts
   const normalizedDebts = [];
   let nextId = 1;
   if (Array.isArray(raw.debts)) {
@@ -252,22 +359,28 @@ function normalizeStateSchema(raw) {
     });
   }
 
+  // 5. monthly_flow (income & expenses)
+  const rawFlow = raw.monthly_flow && typeof raw.monthly_flow === 'object' ? raw.monthly_flow : {};
+  const normalizedMonthlyFlow = {
+    income: normalizeFlowBranch(rawFlow.income),
+    expenses: normalizeFlowBranch(rawFlow.expenses)
+  };
+
   return {
     fx_rate: fxRate,
     wallets: normalizedWallets,
     projects: normalizedProjects,
     debts: normalizedDebts,
+    monthly_flow: normalizedMonthlyFlow,
     logs: Array.isArray(raw.logs) ? raw.logs : [],
     archive: {
       projects: raw.archive && raw.archive.projects && typeof raw.archive.projects === 'object' ? raw.archive.projects : {},
-      debts: raw.archive && Array.isArray(raw.archive.debts) ? raw.archive.debts : []
+      debts: raw.archive && Array.isArray(raw.archive.debts) ? raw.archive.debts : [],
+      monthly_flow: raw.archive && Array.isArray(raw.archive.monthly_flow) ? raw.archive.monthly_flow : []
     }
   };
 }
 
-/**
- * Initialize Application
- */
 function initApp() {
   safeRemoveStorage(STORAGE_KEYS.LEGACY_V1);
 
@@ -342,12 +455,14 @@ function toggleTheme() {
   applyThemeMode(isDark ? 'light' : 'dark');
 }
 
+/**
+ * Switch Active Tab (Completely Separated Tabs: Wallets | Projects & Flow | Debts)
+ */
 function switchTab(tabName) {
   currentTab = tabName;
   const walletsPanel = document.getElementById('panel-wallets');
   const projectsPanel = document.getElementById('panel-projects');
-  const subProjects = document.getElementById('subpanel-projects-container');
-  const subDebts = document.getElementById('subpanel-debts-container');
+  const debtsPanel = document.getElementById('panel-debts');
 
   const btnWallets = document.getElementById('tab-btn-wallets');
   const btnProjects = document.getElementById('tab-btn-projects');
@@ -360,18 +475,17 @@ function switchTab(tabName) {
   if (tabName === 'wallets') {
     walletsPanel.classList.remove('hidden');
     projectsPanel.classList.add('hidden');
+    debtsPanel.classList.add('hidden');
     if (btnWallets) btnWallets.classList.add('active');
   } else if (tabName === 'projects') {
     walletsPanel.classList.add('hidden');
     projectsPanel.classList.remove('hidden');
-    subProjects.classList.remove('hidden');
-    subDebts.classList.remove('hidden');
+    debtsPanel.classList.add('hidden');
     if (btnProjects) btnProjects.classList.add('active');
   } else if (tabName === 'debts') {
     walletsPanel.classList.add('hidden');
-    projectsPanel.classList.remove('hidden');
-    subProjects.classList.add('hidden');
-    subDebts.classList.remove('hidden');
+    projectsPanel.classList.add('hidden');
+    debtsPanel.classList.remove('hidden');
     if (btnDebts) btnDebts.classList.add('active');
   }
 }
@@ -381,10 +495,11 @@ function switchTab(tabName) {
  */
 function archiveClosedItems(targetState = appState) {
   if (!targetState.archive) {
-    targetState.archive = { projects: {}, debts: [] };
+    targetState.archive = { projects: {}, debts: [], monthly_flow: [] };
   }
   if (!targetState.archive.projects) targetState.archive.projects = {};
   if (!Array.isArray(targetState.archive.debts)) targetState.archive.debts = [];
+  if (!Array.isArray(targetState.archive.monthly_flow)) targetState.archive.monthly_flow = [];
 
   if (Array.isArray(targetState.debts)) {
     const remainingDebts = [];
@@ -418,7 +533,7 @@ function archiveClosedItems(targetState = appState) {
 }
 
 /**
- * Context Window Pruning for DeepSeek AI (Active State + Last 3 Logs only, No Archive)
+ * Context Window Pruning for DeepSeek AI (Active State + monthly_flow + Last 3 Logs only, No Archive)
  */
 function buildPrunedContextForAI(sourceState = appState) {
   const recentThreeLogs = Array.isArray(sourceState.logs)
@@ -430,48 +545,45 @@ function buildPrunedContextForAI(sourceState = appState) {
     wallets: JSON.parse(JSON.stringify(sourceState.wallets || {})),
     projects: JSON.parse(JSON.stringify(sourceState.projects || {})),
     debts: JSON.parse(JSON.stringify(sourceState.debts || [])),
+    monthly_flow: JSON.parse(JSON.stringify(sourceState.monthly_flow || {
+      income: { totalSYP: 0, totalUSD: 0, items: [] },
+      expenses: { totalSYP: 0, totalUSD: 0, items: [] }
+    })),
     logs: JSON.parse(JSON.stringify(recentThreeLogs))
   };
 }
 
 /**
- * Enhanced System Prompt (Incorporating User's Direct Structure + Explicit Field Schemas & Accounting Permissions)
+ * System Prompt (Incorporating Strict Currency Separation & monthly_flow Income/Expenses Rules)
  */
 function buildSystemPrompt(sourceState = appState) {
   const prunedState = buildPrunedContextForAI(sourceState);
-  return `أنت محاسب مالي ذكي. مهمتك فهم كلامي بلغتي الطبيعية وتحديث الحالة المالية بدقة.
+  return `أنت محاسب مالي ذكي. مهمتك فهم كلامي بلغتي الطبيعية وتحديث الحالة المالية بدقة، مع الفصل التام بين عملتي الدولار (USD) والليرة السورية (SYP) دون دمج أو تحويل تلقائي بينهما إلا إذا طلبت صراحة عملية تصريف عملة.
 
 الحالة المالية الحالية:
 ${JSON.stringify(prunedState, null, 2)}
 
 قواعد الرد وتوزيع الحقول وهيكلها البرمجي:
-1. "wallets": للأرصدة النقدية الفعلية فقط (كاش دولار، كاش سوري، شام كاش، وغيرها) ولا تضع أسماء الأشخاص هنا أبداً.
-   - هيكل كل محفظة داخل كائن wallets:
-     "اسم المحفظة": { "amount": رقم_الرصيد, "currency": "USD" أو "SYP" }
-2. "debts": لالتزامات وديون وأمانات الأشخاص (لنا = أموال لنا عند الشخص / علينا = أموال للشخص عندنا أو أمانة له بذمتنا).
-   - هيكل كل عنصر داخل مصفوفة debts:
-     { "id": رقم_تسلسلي, "person": "اسم الشخص", "amount": رقم_المبلغ, "currency": "USD" أو "SYP", "type": "لنا" أو "علينا", "note": "توضيح مختصر" }
-3. "projects": لأرباح وتكاليف المشاريع والورشات.
-   - هيكل كل مشروع داخل كائن projects:
-     "اسم المشروع": { "netSYP": صافي_الليرة, "netUSD": صافي_الدولار, "summary": "وصف مختصر" }
-4. "fx_rate": سعر صرف الدولار مقابل الليرة السورية (رقم).
-
-صلاحياتك المحاسبية:
-- لك الصلاحية الكاملة لإنشاء محافظ أو ديون أو مشاريع جديدة إذا لم تكن موجودة، أو تعديل أرصدتها، أو تصفيرها عند السداد.
-- انتبه للمنطق المحاسبي المزدوج:
-  * إذا قلت لك مثلاً "للفلان عندي مبلغ 182 دولار" أو "لفلان بذمتي مبلغ"، فهذا دين/التزام في "debts" بنوع "علينا" وليس محفظة في "wallets".
-  * إذا قلت لك "فلان أعطاني مبلغاً" أو "قبضت من فلان مبلغاً نقدياً": قم بزيادة رصيد المحفظة النقدية المناسبة في "wallets" (مثل "كاش دولار" للعمليات بالدولار أو "كاش سوري" للعمليات بالليرة، وأنشئ المحفظة تلقائياً إن لم تكن موجودة)، وفي نفس الوقت حدث ذمة هذا الشخص في "debts" (إما بإنقاص/تسديد دينه إن كان "لنا" عليه دين سابق، أو بتسجيل المبلغ في "debts" كالتزام "علينا" له إن لم يكن عليه دين سابق).
-  * إذا قلت لك "أعطيت فلاناً مبلغاً" أو "سددت لفلان": اخصم المبلغ من المحفظة النقدية المناسبة في "wallets" وحدث ذمته في "debts".
+1. "wallets": للأرصدة النقدية الفعلية فقط (مثل: كاش دولار، كاش سوري، شام كاش) ولا تضع أسماء الأشخاص هنا أبداً.
+   - هيكل كل محفظة: "اسم المحفظة": { "amount": رقم_الرصيد, "currency": "USD" أو "SYP" }
+2. "debts": لالتزامات وديون وأمانات الأشخاص القابلة للاسترداد أو السداد (لنا = أموال لنا عند الغير / علينا = أموال للغير عندنا).
+   - هيكل كل دين داخل مصفوفة debts: { "id": رقم, "person": "اسم الشخص", "amount": رقم, "currency": "USD" أو "SYP", "type": "لنا" أو "علينا", "note": "توضيح" }
+3. "projects": لمراكز وأرباح المشاريع والورشات المستمرة.
+   - هيكل كل مشروع: "اسم المشروع": { "netSYP": صافي_الليرة, "netUSD": صافي_الدولار, "summary": "وصف مختصر" }
+4. "monthly_flow": لتتبع التدفق المالي الشهري للأموال التي لا تُسترد (المصروفات التشغيلية أو الشخصية، والإيرادات أو الأرباح المسحوبة):
+   - يحتوي على قسمين:
+     * "income" (إيرادات وأرباح مسحوبة): { "totalSYP": إجمالي_الليرة, "totalUSD": إجمالي_الدولار, "items": [{ "id": رقم, "title": "وصف الإيراد", "amount": رقم, "currency": "SYP" أو "USD" }] }
+     * "expenses" (مصروفات ومشتريات لا تُسترد مثل شراء مواد أولية للغرانولا أو مصاريف شخصية): { "totalSYP": إجمالي_الليرة, "totalUSD": إجمالي_الدولار, "items": [{ "id": رقم, "title": "وصف المصروف", "amount": رقم, "currency": "SYP" أو "USD" }] }
+   - القاعدة المحاسبية لـ monthly_flow: عند ذكر مصروف (مثل شراء مواد أولية لمشروع الغرانولا أو مصروف شخصي) أو إيراد/ربح مسحوب (مثل أرباح مسحوبة من مشروع)، قم فوراً بخصم/إضافة المبلغ من محفظة الكاش المناسبة في "wallets"، وفي نفس اللحظة أضف القيمة إلى عداد وقائمة "expenses" أو "income" داخل "monthly_flow" بنفس العملة، دون اعتبار هذا المصروف ديناً في "debts" أو مشروعاً مستقلاً في "projects".
 
 المطلوب:
 افهم ما أطلبه منك، قم بتحديث الأرقام المحاسبية المناسبة، وأرجع حصراً كائن JSON صالح يحتوي على:
-1. "reply": رد بشري مختصر جداً وواضح يوضح ما فعلته.
-2. "updated_state": كائن الحالة المحدث بالكامل (شاملاً fx_rate و wallets و projects و debts).`;
+1. "reply": رد بشري مختصر جداً يوضح ما فعلته.
+2. "updated_state": كائن الحالة المحدث بالكامل (شاملاً fx_rate و wallets و projects و debts و monthly_flow).`;
 }
 
 /**
  * State Diffing & Validation (`validateState`)
- * Compares normalized currentState vs normalized updatedState across wallets, projects, debts, and fx_rate.
  */
 function validateState(currentState, updatedState) {
   const warnings = [];
@@ -536,7 +648,7 @@ function validateState(currentState, updatedState) {
     }
   });
 
-  // 3. Debts Diff (Additions, Modifications, Settlements, and Deletions)
+  // 3. Debts Diff
   const curDebts = Array.isArray(currentState.debts) ? currentState.debts : [];
   const newDebts = Array.isArray(updatedState.debts) ? updatedState.debts : [];
 
@@ -573,7 +685,24 @@ function validateState(currentState, updatedState) {
     }
   });
 
-  // 4. FX Rate Diff
+  // 4. Monthly Flow Diff
+  const curFlow = currentState.monthly_flow || { income: { totalSYP: 0, totalUSD: 0 }, expenses: { totalSYP: 0, totalUSD: 0 } };
+  const newFlow = updatedState.monthly_flow || { income: { totalSYP: 0, totalUSD: 0 }, expenses: { totalSYP: 0, totalUSD: 0 } };
+
+  if ((Number(newFlow.income?.totalSYP) || 0) !== (Number(curFlow.income?.totalSYP) || 0)) {
+    changes.push(`تحديث إيرادات الشهر (SYP): من ${formatNumber(curFlow.income?.totalSYP, 'SYP')} إلى ${formatNumber(newFlow.income?.totalSYP, 'SYP')}`);
+  }
+  if ((Number(newFlow.income?.totalUSD) || 0) !== (Number(curFlow.income?.totalUSD) || 0)) {
+    changes.push(`تحديث إيرادات الشهر (USD): من ${formatNumber(curFlow.income?.totalUSD, 'USD')} إلى ${formatNumber(newFlow.income?.totalUSD, 'USD')}`);
+  }
+  if ((Number(newFlow.expenses?.totalSYP) || 0) !== (Number(curFlow.expenses?.totalSYP) || 0)) {
+    changes.push(`تحديث مصروفات الشهر (SYP): من ${formatNumber(curFlow.expenses?.totalSYP, 'SYP')} إلى ${formatNumber(newFlow.expenses?.totalSYP, 'SYP')}`);
+  }
+  if ((Number(newFlow.expenses?.totalUSD) || 0) !== (Number(curFlow.expenses?.totalUSD) || 0)) {
+    changes.push(`تحديث مصروفات الشهر (USD): من ${formatNumber(curFlow.expenses?.totalUSD, 'USD')} إلى ${formatNumber(newFlow.expenses?.totalUSD, 'USD')}`);
+  }
+
+  // 5. FX Rate Diff
   if (Number(updatedState.fx_rate) && Number(updatedState.fx_rate) !== Number(currentState.fx_rate)) {
     changes.push(`تحديث سعر الصرف: من ${formatNumber(currentState.fx_rate)} إلى ${formatNumber(updatedState.fx_rate)} ل.س/$`);
   }
@@ -587,7 +716,7 @@ function validateState(currentState, updatedState) {
 }
 
 /**
- * Render Complete UI
+ * Render Complete UI (Strictly Separated Currencies - Zero Cross-Currency Multiplication/Division)
  */
 function renderUI() {
   const fx = Number(appState.fx_rate) || 15000;
@@ -598,6 +727,7 @@ function renderUI() {
   const logsBadge = document.getElementById('logs-count-badge');
   if (logsBadge) logsBadge.textContent = String((appState.logs || []).length);
 
+  // 1. Top 2 Summary Cards: Total Cash in SYP & Total Cash in USD (No conversion)
   let totalWalletsSYP = 0;
   let totalWalletsUSD = 0;
   Object.values(appState.wallets || {}).forEach((w) => {
@@ -609,45 +739,23 @@ function renderUI() {
     }
   });
 
-  let totalProjectsSYP = 0;
-  Object.values(appState.projects || {}).forEach((p) => {
-    totalProjectsSYP += (Number(p.netSYP) || 0) + ((Number(p.netUSD) || 0) * fx);
-  });
-
-  let netDebtsUSD = 0;
-  const activeDebts = appState.debts || [];
-  activeDebts.forEach((d) => {
-    const rawAmt = Number(d.amount) || 0;
-    const inUsd = (d.currency || 'USD').toUpperCase() === 'SYP' ? rawAmt / fx : rawAmt;
-    if (d.type === 'لنا') {
-      netDebtsUSD += inUsd;
-    } else {
-      netDebtsUSD -= inUsd;
-    }
-  });
-
   const sumSypEl = document.getElementById('summary-wallets-syp');
   const sumUsdEl = document.getElementById('summary-wallets-usd');
-  const sumProjEl = document.getElementById('summary-projects-net');
-  const sumDebtsCountEl = document.getElementById('summary-debts-count');
-  const sumDebtsNetEl = document.getElementById('summary-debts-net');
-
-  if (sumSypEl) sumSypEl.textContent = `${formatNumber(totalWalletsSYP)} ل.س`;
+  if (sumSypEl) sumSypEl.textContent = formatNumber(totalWalletsSYP, 'SYP');
   if (sumUsdEl) sumUsdEl.textContent = formatNumber(totalWalletsUSD, 'USD');
-  if (sumProjEl) sumProjEl.textContent = `${formatNumber(Math.round(totalProjectsSYP))} ل.س`;
-  if (sumDebtsCountEl) sumDebtsCountEl.textContent = `${activeDebts.length}`;
-  if (sumDebtsNetEl) {
-    const sign = netDebtsUSD > 0 ? '+' : '';
-    sumDebtsNetEl.textContent = `${sign}${formatNumber(netDebtsUSD, 'USD')}`;
-  }
 
-  renderWalletsSection(fx);
-  renderProjectsSection(fx);
+  // 2. Render Wallets, Projects, Monthly Flow, Debts, and Logs
+  renderWalletsSection();
+  renderProjectsSection();
+  renderMonthlyFlowSection();
   renderDebtsSection();
   renderContextLogsStrip();
 }
 
-function renderWalletsSection(fx) {
+/**
+ * Render Wallets Section (No "يعادل كذا" subtitle - pure currency display)
+ */
+function renderWalletsSection() {
   const grid = document.getElementById('wallets-grid');
   if (!grid) return;
 
@@ -668,9 +776,7 @@ function renderWalletsSection(fx) {
   grid.innerHTML = entries.map(([name, data]) => {
     const amount = Number(data.amount) || 0;
     const currency = (data.currency || 'SYP').toUpperCase();
-    const equivalent = currency === 'USD'
-      ? `يعادل ${formatNumber(Math.round(amount * fx))} ل.س`
-      : `يعادل ${formatNumber(amount / fx, 'USD')}`;
+    const currencyLabel = currency === 'USD' ? 'محفظة دولار أمريكي' : 'محفظة ليرة سورية';
     const safeName = escapeHtml(name);
 
     return `
@@ -685,7 +791,7 @@ function renderWalletsSection(fx) {
             </div>
             <div>
               <h3 class="card-title">${safeName}</h3>
-              <span class="card-subtext">${equivalent}</span>
+              <span class="card-subtext">${currencyLabel}</span>
             </div>
           </div>
           <span class="badge-pill">${currency}</span>
@@ -731,15 +837,31 @@ function renderWalletsSection(fx) {
   }).join('');
 }
 
-function renderProjectsSection(fx) {
+/**
+ * Render Projects Section (Independent SYP & USD Totals - Zero Merging)
+ */
+function renderProjectsSection() {
   const grid = document.getElementById('projects-grid');
+  const netSypEl = document.getElementById('projects-net-syp-val');
+  const netUsdEl = document.getElementById('projects-net-usd-val');
   if (!grid) return;
 
+  let totalNetSYP = 0;
+  let totalNetUSD = 0;
   const entries = Object.entries(appState.projects || {});
+
+  entries.forEach(([, proj]) => {
+    totalNetSYP += Number(proj.netSYP) || 0;
+    totalNetUSD += Number(proj.netUSD) || 0;
+  });
+
+  if (netSypEl) netSypEl.textContent = formatNumber(totalNetSYP, 'SYP');
+  if (netUsdEl) netUsdEl.textContent = formatNumber(totalNetUSD, 'USD');
+
   if (entries.length === 0) {
     grid.innerHTML = `
       <div class="empty-state-box">
-        <span>لا توجد مشاريع نشطة حالياً. يمكنك إضافة مشروع جديد لمتابعة أرباحه ومصاريفه.</span>
+        <span>لا توجد مشاريع نشطة حالياً. يمكنك إضافة مشروع جديد لمتابعة عوائده بالليرة والدولار بشكل مستقل.</span>
       </div>
     `;
     return;
@@ -750,7 +872,6 @@ function renderProjectsSection(fx) {
     const netUSD = Number(proj.netUSD) || 0;
     const summary = escapeHtml(proj.summary || 'مشروع نشط');
     const safeName = escapeHtml(name);
-    const totalInSYP = netSYP + (netUSD * fx);
 
     return `
       <article class="item-card">
@@ -759,11 +880,14 @@ function renderProjectsSection(fx) {
             <h3 class="card-title">${safeName}</h3>
             <p class="card-subtext">${summary}</p>
           </div>
-          <span class="badge-pill num-ltr">${formatNumber(Math.round(totalInSYP))} ل.س</span>
+          <div style="display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap;">
+            <span class="badge-pill num-ltr">${formatNumber(netSYP, 'SYP')}</span>
+            <span class="badge-pill num-ltr">${formatNumber(netUSD, 'USD')}</span>
+          </div>
         </div>
 
         <div style="display:flex; flex-wrap:wrap; gap:1rem; font-size:0.78rem; color:var(--text-muted);">
-          <div>صافي الليرة: <strong class="num-ltr" style="color:var(--text-main);">${formatNumber(netSYP)} SYP</strong></div>
+          <div>صافي الليرة: <strong class="num-ltr" style="color:var(--text-main);">${formatNumber(netSYP, 'SYP')}</strong></div>
           <div>صافي الدولار: <strong class="num-ltr" style="color:var(--text-main);">${formatNumber(netUSD, 'USD')}</strong></div>
         </div>
 
@@ -782,11 +906,100 @@ function renderProjectsSection(fx) {
   }).join('');
 }
 
+/**
+ * Render Monthly Financial Flow Section (Income & Expenses)
+ */
+function renderMonthlyFlowSection() {
+  const flow = appState.monthly_flow || {
+    income: { totalSYP: 0, totalUSD: 0, items: [] },
+    expenses: { totalSYP: 0, totalUSD: 0, items: [] }
+  };
+
+  const incSypEl = document.getElementById('flow-income-syp');
+  const incUsdEl = document.getElementById('flow-income-usd');
+  const expSypEl = document.getElementById('flow-expenses-syp');
+  const expUsdEl = document.getElementById('flow-expenses-usd');
+  const listEl = document.getElementById('monthly-flow-list');
+
+  if (incSypEl) incSypEl.textContent = formatNumber(flow.income?.totalSYP || 0, 'SYP');
+  if (incUsdEl) incUsdEl.textContent = formatNumber(flow.income?.totalUSD || 0, 'USD');
+  if (expSypEl) expSypEl.textContent = formatNumber(flow.expenses?.totalSYP || 0, 'SYP');
+  if (expUsdEl) expUsdEl.textContent = formatNumber(flow.expenses?.totalUSD || 0, 'USD');
+
+  if (!listEl) return;
+
+  const incomeItems = (flow.income?.items || []).map((item) => ({ ...item, flowType: 'income' }));
+  const expenseItems = (flow.expenses?.items || []).map((item) => ({ ...item, flowType: 'expenses' }));
+  const combined = [...expenseItems, ...incomeItems];
+
+  if (combined.length === 0) {
+    listEl.innerHTML = `
+      <div class="empty-state-box">
+        <span>لا توجد مصروفات أو إيرادات مسجلة لهذا الشهر حتى الآن.</span>
+      </div>
+    `;
+    return;
+  }
+
+  listEl.innerHTML = combined.map((item) => {
+    const isIncome = item.flowType === 'income';
+    const badgeLabel = isIncome ? 'إيراد / ربح' : 'مصروف';
+    const badgeStyle = isIncome
+      ? ''
+      : 'color:var(--rose-text); background-color:var(--rose-soft);';
+    return `
+      <div class="log-row">
+        <div style="display:flex; align-items:center; gap:0.5rem; min-width:0;">
+          <span class="badge-pill" style="${badgeStyle}">${badgeLabel}</span>
+          <span style="font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(item.title)}</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:0.5rem; flex-shrink:0;">
+          <strong class="num-ltr" style="color:${isIncome ? 'var(--emerald-primary)' : 'var(--rose-text)'};">${formatNumber(item.amount, item.currency)}</strong>
+          <button type="button" onclick="deleteMonthlyFlowItem('${item.flowType}', ${Number(item.id)})" class="btn-wallet-icon danger" style="width:1.75rem; height:1.75rem;" title="حذف البند">
+            <svg style="width:0.8rem; height:0.8rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/**
+ * Render Debts Section (Independent SYP & USD Totals - Zero Merging)
+ */
 function renderDebtsSection() {
   const listEl = document.getElementById('debts-list');
+  const netSypEl = document.getElementById('debts-net-syp-val');
+  const netUsdEl = document.getElementById('debts-net-usd-val');
   if (!listEl) return;
 
   const debts = Array.isArray(appState.debts) ? appState.debts : [];
+
+  let netSYP = 0;
+  let netUSD = 0;
+  debts.forEach((d) => {
+    const amt = Number(d.amount) || 0;
+    const cur = (d.currency || 'USD').toUpperCase();
+    const sign = d.type === 'لنا' ? 1 : -1;
+    if (cur === 'SYP') {
+      netSYP += sign * amt;
+    } else {
+      netUSD += sign * amt;
+    }
+  });
+
+  if (netSypEl) {
+    const prefix = netSYP > 0 ? '+' : '';
+    netSypEl.textContent = `${prefix}${formatNumber(netSYP, 'SYP')}`;
+  }
+  if (netUsdEl) {
+    const prefix = netUSD > 0 ? '+' : '';
+    netUsdEl.textContent = `${prefix}${formatNumber(netUSD, 'USD')}`;
+  }
+
   if (debts.length === 0) {
     listEl.innerHTML = `
       <div class="empty-state-box">
@@ -850,21 +1063,83 @@ function renderContextLogsStrip() {
 
 /**
  * ============================================================================
- * HYBRID LOCAL OPERATIONS
+ * EXPANDED EXCHANGE RATE MODAL WITH LIVE INSTANT CALCULATOR
  * ============================================================================
  */
 
 function openFxModal() {
   currentHybridContext = { type: 'fx' };
-  document.getElementById('hybrid-modal-title').textContent = 'تعديل سعر الصرف الحي (SYP / USD)';
+  const currentRate = Number(appState.fx_rate) || 15000;
+  document.getElementById('hybrid-modal-title').textContent = 'سعر الصرف وأداة التحويل اللحظية';
   document.getElementById('hybrid-modal-fields').innerHTML = `
     <div>
-      <label class="field-label">سعر صرف الدولار الواحد بالليرة السورية:</label>
-      <input id="hybrid-fx-input" type="number" step="any" min="1" required value="${Number(appState.fx_rate) || 15000}" class="num-ltr" />
+      <label class="field-label">سعر الصرف المعتمد (1 دولار مقابل الليرة السورية):</label>
+      <input id="hybrid-fx-input" type="number" step="any" min="1" required value="${currentRate}" oninput="onFxRateInputChange()" class="num-ltr" />
+    </div>
+
+    <div class="calc-box">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <span style="font-size:0.75rem; font-weight:700; color:var(--emerald-primary);">حاسبة التحويل السريع (بدون اتصال بالذكاء)</span>
+        <span class="badge-pill">LIVE</span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
+        <div>
+          <label class="field-label" style="font-size:0.68rem;">المبلغ بالدولار ($ USD):</label>
+          <input id="calc-usd-input" type="number" step="any" placeholder="100" oninput="onFxCalculatorInput('usd')" class="num-ltr" />
+        </div>
+        <div>
+          <label class="field-label" style="font-size:0.68rem;">المبلغ بالليرة (SYP):</label>
+          <input id="calc-syp-input" type="number" step="any" placeholder="${currentRate * 100}" oninput="onFxCalculatorInput('syp')" class="num-ltr" />
+        </div>
+      </div>
     </div>
   `;
   showHybridModal();
 }
+
+function onFxRateInputChange() {
+  const usdInput = document.getElementById('calc-usd-input');
+  const sypInput = document.getElementById('calc-syp-input');
+  if (!usdInput || !sypInput) return;
+
+  if (usdInput.value !== '') {
+    onFxCalculatorInput('usd');
+  } else if (sypInput.value !== '') {
+    onFxCalculatorInput('syp');
+  }
+}
+
+function onFxCalculatorInput(sourceField) {
+  const fxInput = document.getElementById('hybrid-fx-input');
+  const usdInput = document.getElementById('calc-usd-input');
+  const sypInput = document.getElementById('calc-syp-input');
+  if (!fxInput || !usdInput || !sypInput) return;
+
+  const rate = Number(fxInput.value) || Number(appState.fx_rate) || 1;
+  if (rate <= 0) return;
+
+  if (sourceField === 'usd') {
+    const usdVal = parseFloat(usdInput.value);
+    if (isNaN(usdVal)) {
+      sypInput.value = '';
+    } else {
+      sypInput.value = Math.round(usdVal * rate);
+    }
+  } else if (sourceField === 'syp') {
+    const sypVal = parseFloat(sypInput.value);
+    if (isNaN(sypVal)) {
+      usdInput.value = '';
+    } else {
+      usdInput.value = Number((sypVal / rate).toFixed(2));
+    }
+  }
+}
+
+/**
+ * ============================================================================
+ * HYBRID LOCAL OPERATIONS (Wallets, Projects, Monthly Flow, Debts)
+ * ============================================================================
+ */
 
 function openWalletModal() {
   currentHybridContext = { type: 'new_wallet' };
@@ -992,6 +1267,111 @@ function deleteProjectLocally(projName) {
   saveStateToStorage();
   renderUI();
   showToast(`تم حذف مشروع ${projName}`);
+}
+
+/**
+ * Monthly Flow Manual Entry & Archiving
+ */
+function openMonthlyFlowModal() {
+  currentHybridContext = { type: 'new_monthly_flow' };
+  const walletOptions = Object.keys(appState.wallets || {}).map((w) =>
+    `<option value="${escapeHtml(w)}">${escapeHtml(w)} (${appState.wallets[w].currency})</option>`
+  ).join('');
+
+  document.getElementById('hybrid-modal-title').textContent = 'تسجيل مصروف أو إيراد شهري';
+  document.getElementById('hybrid-modal-fields').innerHTML = `
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
+      <div>
+        <label class="field-label">نوع الحركة:</label>
+        <select id="hybrid-flow-type">
+          <option value="expenses">مصروف (Expenses)</option>
+          <option value="income">إيراد / ربح مسحوب (Income)</option>
+        </select>
+      </div>
+      <div>
+        <label class="field-label">العملة:</label>
+        <select id="hybrid-flow-currency">
+          <option value="SYP">SYP (ليرة سورية)</option>
+          <option value="USD">USD (دولار أمريكي)</option>
+        </select>
+      </div>
+    </div>
+    <div>
+      <label class="field-label">البيان / التصنيف:</label>
+      <input id="hybrid-flow-title" type="text" required placeholder="مثال: مواد أولية غرانولا أو مصاريف شخصية" />
+    </div>
+    <div>
+      <label class="field-label">المبلغ:</label>
+      <input id="hybrid-flow-amount" type="number" step="any" min="0.01" required placeholder="0" class="num-ltr" />
+    </div>
+    <div>
+      <label class="field-label">تأثير مباشر على محفظة نقدية (اختياري):</label>
+      <select id="hybrid-flow-wallet">
+        <option value="">-- بدون خصم/إضافة من المحافظ --</option>
+        ${walletOptions}
+      </select>
+    </div>
+  `;
+  showHybridModal();
+}
+
+function deleteMonthlyFlowItem(flowType, itemId) {
+  const branch = appState.monthly_flow?.[flowType];
+  if (!branch || !Array.isArray(branch.items)) return;
+
+  const idx = branch.items.findIndex((i) => Number(i.id) === Number(itemId));
+  if (idx === -1) return;
+
+  const removed = branch.items.splice(idx, 1)[0];
+  if (removed.currency === 'USD') {
+    branch.totalUSD = Math.max(0, (Number(branch.totalUSD) || 0) - (Number(removed.amount) || 0));
+  } else {
+    branch.totalSYP = Math.max(0, (Number(branch.totalSYP) || 0) - (Number(removed.amount) || 0));
+  }
+
+  appendLog(`حذف بند من التدفق الشهري: "${removed.title}"`);
+  saveStateToStorage();
+  renderUI();
+  showToast('تم حذف البند من التدفق الشهري');
+}
+
+function archiveCurrentMonthLocally() {
+  const flow = appState.monthly_flow || {
+    income: { totalSYP: 0, totalUSD: 0, items: [] },
+    expenses: { totalSYP: 0, totalUSD: 0, items: [] }
+  };
+
+  const hasData = (Number(flow.income?.totalSYP) || 0) > 0 ||
+    (Number(flow.income?.totalUSD) || 0) > 0 ||
+    (Number(flow.expenses?.totalSYP) || 0) > 0 ||
+    (Number(flow.expenses?.totalUSD) || 0) > 0 ||
+    (flow.income?.items?.length || 0) > 0 ||
+    (flow.expenses?.items?.length || 0) > 0;
+
+  if (!hasData) {
+    showToast('عدادات الشهر الحالي مصفّرة بالفعل');
+    return;
+  }
+
+  if (!appState.archive) appState.archive = { projects: {}, debts: [], monthly_flow: [] };
+  if (!Array.isArray(appState.archive.monthly_flow)) appState.archive.monthly_flow = [];
+
+  appState.archive.monthly_flow.unshift({
+    archivedAt: formatTimestamp(),
+    income: JSON.parse(JSON.stringify(flow.income)),
+    expenses: JSON.parse(JSON.stringify(flow.expenses))
+  });
+
+  // Reset monthly_flow counters to start a new month while keeping wallets & debts untouched
+  appState.monthly_flow = {
+    income: { totalSYP: 0, totalUSD: 0, items: [] },
+    expenses: { totalSYP: 0, totalUSD: 0, items: [] }
+  };
+
+  appendLog('أرشفة التدفق المالي للشهر وتصفير عدادات الإيرادات والمصروفات لبدء شهر جديد');
+  saveStateToStorage();
+  renderUI();
+  showToast('تمت أرشفة الشهر وتصفير عدادات التدفق الشهري');
 }
 
 function openDebtModal() {
@@ -1148,6 +1528,42 @@ function submitHybridModal(event) {
       renderUI();
       showToast('تم تحديث المشروع');
     }
+  } else if (ctx.type === 'new_monthly_flow') {
+    const flowType = document.getElementById('hybrid-flow-type').value;
+    const currency = document.getElementById('hybrid-flow-currency').value;
+    const title = document.getElementById('hybrid-flow-title').value.trim();
+    const amount = Number(document.getElementById('hybrid-flow-amount').value) || 0;
+    const selectedWallet = document.getElementById('hybrid-flow-wallet').value;
+
+    if (title && amount > 0) {
+      const branch = appState.monthly_flow[flowType];
+      const nextId = (branch.items || []).reduce((max, i) => Math.max(max, Number(i.id) || 0), 0) + 1;
+      branch.items.unshift({
+        id: nextId,
+        title,
+        amount,
+        currency,
+        date: formatTimestamp()
+      });
+      if (currency === 'USD') {
+        branch.totalUSD = (Number(branch.totalUSD) || 0) + amount;
+      } else {
+        branch.totalSYP = (Number(branch.totalSYP) || 0) + amount;
+      }
+
+      if (selectedWallet && appState.wallets[selectedWallet]) {
+        const w = appState.wallets[selectedWallet];
+        w.amount = flowType === 'income'
+          ? (Number(w.amount) || 0) + amount
+          : (Number(w.amount) || 0) - amount;
+      }
+
+      const label = flowType === 'income' ? 'تسجيل إيراد شهري' : 'تسجيل مصروف شهري';
+      appendLog(`${label}: "${title}" بقيمة ${formatNumber(amount, currency)}`);
+      saveStateToStorage();
+      renderUI();
+      showToast('تم تسجيل الحركة في التدفق الشهري');
+    }
   } else if (ctx.type === 'new_debt') {
     const person = document.getElementById('hybrid-debt-person').value.trim();
     const type = document.getElementById('hybrid-debt-type').value;
@@ -1279,13 +1695,11 @@ async function sendCommandToAI() {
       .trim();
     const parsed = JSON.parse(cleaned);
 
-    // Support both { reply, updated_state } and direct state object fallback
     const rawUpdatedState = parsed.updated_state || parsed.state || parsed;
     if (!rawUpdatedState || typeof rawUpdatedState !== 'object') {
       throw new Error('لم يُرجع الذكاء الاصطناعي كائن حالة صالحاً.');
     }
 
-    // Normalize the incoming state BEFORE diffing and presenting so all keys match
     const normalizedProposedState = normalizeStateSchema(rawUpdatedState);
 
     presentAIProposal(commandText, {
@@ -1382,7 +1796,7 @@ function commitValidatedAIState() {
   if (!pendingAIProposal) return;
 
   const incoming = pendingAIProposal.updated_state;
-  const preservedArchive = appState.archive || { projects: {}, debts: [] };
+  const preservedArchive = appState.archive || { projects: {}, debts: [], monthly_flow: [] };
   const preservedLogs = Array.isArray(appState.logs) ? [...appState.logs] : [];
 
   appState = normalizeStateSchema({
@@ -1442,6 +1856,7 @@ function switchLogsModalTab(tab) {
 
 function renderLogsAndArchiveModal() {
   const logsContainer = document.getElementById('modal-view-logs');
+  const archMonthsContainer = document.getElementById('archive-months-list');
   const archProjContainer = document.getElementById('archive-projects-list');
   const archDebtsContainer = document.getElementById('archive-debts-list');
 
@@ -1461,6 +1876,26 @@ function renderLogsAndArchiveModal() {
         </div>
       `;
     }).join('');
+  }
+
+  if (archMonthsContainer) {
+    const archMonths = appState.archive?.monthly_flow || [];
+    if (archMonths.length === 0) {
+      archMonthsContainer.innerHTML = `<div class="empty-state-box" style="padding:0.85rem;">لا توجد أشهر مؤرشفة.</div>`;
+    } else {
+      archMonthsContainer.innerHTML = archMonths.map((m) => `
+        <div class="log-row" style="flex-direction:column; align-items:stretch; gap:0.25rem;">
+          <div style="display:flex; justify-content:space-between; font-weight:700;">
+            <span>أرشيف شهر</span>
+            <span class="num-ltr" style="font-size:0.68rem; color:var(--text-muted);">${escapeHtml(m.archivedAt || '-')}</span>
+          </div>
+          <div style="font-size:0.72rem; color:var(--text-muted);">
+            الإيرادات: ${formatNumber(m.income?.totalSYP || 0, 'SYP')} | ${formatNumber(m.income?.totalUSD || 0, 'USD')} —
+            المصروفات: ${formatNumber(m.expenses?.totalSYP || 0, 'SYP')} | ${formatNumber(m.expenses?.totalUSD || 0, 'USD')}
+          </div>
+        </div>
+      `).join('');
+    }
   }
 
   const archProjects = Object.entries(appState.archive?.projects || {});
@@ -1511,7 +1946,7 @@ function restoreArchivedProject(projName) {
 
 function clearLogsAndArchiveLocally() {
   appState.logs = [];
-  appState.archive = { projects: {}, debts: [] };
+  appState.archive = { projects: {}, debts: [], monthly_flow: [] };
   saveStateToStorage();
   renderUI();
   renderLogsAndArchiveModal();
@@ -1578,12 +2013,17 @@ Object.assign(window, {
   toggleTheme,
   switchTab,
   openFxModal,
+  onFxRateInputChange,
+  onFxCalculatorInput,
   openWalletModal,
   openWalletAdjustModal,
   deleteWalletLocally,
   openProjectModal,
   openProjectEditModal,
   deleteProjectLocally,
+  openMonthlyFlowModal,
+  deleteMonthlyFlowItem,
+  archiveCurrentMonthLocally,
   openDebtModal,
   openDebtEditModal,
   deleteDebtLocally,

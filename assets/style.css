@@ -761,3 +761,80 @@ input:focus, textarea:focus, select:focus {
 .spin-icon {
   animation: spin 1s linear infinite;
 }
+
+/* ==========================================================================
+   v1.3 Additions: 2-Card Top Summary, Dual-Currency Badges & Monthly Flow
+   ========================================================================== */
+.summary-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.sub-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-hairline);
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.75rem;
+}
+
+.sub-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.sub-summary-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.sub-summary-val {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.flow-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+}
+
+@media (min-width: 540px) {
+  .flow-grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.flow-box {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-hairline);
+  border-radius: 0.8rem;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.flow-box.income {
+  border-right: 3px solid var(--emerald-primary);
+}
+
+.flow-box.expenses {
+  border-right: 3px solid var(--rose-text);
+}
+
+.calc-box {
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-hairline);
+  border-radius: 0.75rem;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}

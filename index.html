@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#065F46" />
-  <title>My Wallet v1.2 | محفظتي</title>
+  <title>My Wallet v1.3 | محفظتي</title>
   <link rel="stylesheet" href="assets/style.css" />
 </head>
 <body>
@@ -23,15 +23,15 @@
         <div class="brand-title-wrap">
           <div class="brand-title-row">
             <h1 class="brand-title">محفظتي</h1>
-            <span class="brand-version">v1.2</span>
+            <span class="brand-version">v1.3</span>
           </div>
         </div>
       </div>
 
-      <!-- Header Actions (All 4 Controls Visible on Every Screen Size) -->
+      <!-- Header Actions -->
       <div class="header-actions">
-        <!-- 1. Live Exchange Rate Pill -->
-        <button id="btn-fx-rate" type="button" onclick="openFxModal()" title="تعديل سعر الصرف" class="fx-pill-btn">
+        <!-- 1. Live Exchange Rate & Calculator Pill -->
+        <button id="btn-fx-rate" type="button" onclick="openFxModal()" title="سعر الصرف وحاسبة التحويل اللحظية" class="fx-pill-btn">
           <svg style="width:0.85rem; height:0.85rem; color:var(--emerald-primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
             <polyline points="17 6 23 6 23 12"/>
@@ -69,7 +69,7 @@
           </svg>
         </button>
 
-        <!-- 4. Settings & Data Wipe Button (Always Visible) -->
+        <!-- 4. Settings & Data Wipe Button -->
         <button id="btn-open-settings" type="button" onclick="openSettingsModal()" title="الإعدادات وتصفير البيانات" aria-label="الإعدادات" class="icon-action-btn">
           <svg style="width:1.05rem; height:1.05rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"/>
@@ -83,14 +83,14 @@
   <!-- Main Content -->
   <main class="app-main">
 
-    <!-- Financial Overview Cards -->
-    <section aria-label="ملخص السيولة" class="summary-grid">
+    <!-- Top Summary Cards: Strictly TWO Cards Only (Total Cash SYP & Total Cash USD, Zero Currency Merging) -->
+    <section aria-label="ملخص السيولة النقدية" class="summary-grid-2">
       <div class="summary-card">
         <div class="summary-card-head">
           <span>إجمالي الكاش (ل.س)</span>
           <span class="badge-pill">SYP</span>
         </div>
-        <div id="summary-wallets-syp" class="summary-card-val num-ltr">0 ل.س</div>
+        <div id="summary-wallets-syp" class="summary-card-val num-ltr">0 SYP</div>
       </div>
 
       <div class="summary-card">
@@ -100,25 +100,9 @@
         </div>
         <div id="summary-wallets-usd" class="summary-card-val num-ltr">$0</div>
       </div>
-
-      <div class="summary-card">
-        <div class="summary-card-head">
-          <span>صافي المشاريع</span>
-          <span style="font-size:0.62rem; font-family:var(--font-mono);">NET</span>
-        </div>
-        <div id="summary-projects-net" class="summary-card-val num-ltr" style="color:var(--emerald-primary);">0 ل.س</div>
-      </div>
-
-      <div class="summary-card">
-        <div class="summary-card-head">
-          <span>صافي الذمم والديون</span>
-          <span id="summary-debts-count" style="font-size:0.62rem; padding:0.05rem 0.35rem; border-radius:0.25rem; background-color:var(--bg-subtle);">0</span>
-        </div>
-        <div id="summary-debts-net" class="summary-card-val num-ltr">$0</div>
-      </div>
     </section>
 
-    <!-- Navigation Tabs -->
+    <!-- Navigation Tabs (3 Completely Independent Views: Wallets | Projects & Flow | Debts) -->
     <nav aria-label="التبويبات الرئيسية" class="tabs-bar">
       <button id="tab-btn-wallets" type="button" onclick="switchTab('wallets')" class="tab-btn active">
         <svg style="width:0.95rem; height:0.95rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -133,7 +117,7 @@
           <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
           <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
         </svg>
-        <span>المشاريع والذمم</span>
+        <span>المشاريع والمصروفات</span>
       </button>
 
       <button id="tab-btn-debts" type="button" onclick="switchTab('debts')" class="tab-btn">
@@ -143,16 +127,16 @@
           <path d="M19 8v6"/>
           <path d="M22 11h-6"/>
         </svg>
-        <span>الديون</span>
+        <span>الديون والذمم</span>
       </button>
     </nav>
 
-    <!-- TAB 1: WALLETS -->
+    <!-- TAB 1: WALLETS (Pure Currency Display - No Cross-Currency Equivalents) -->
     <section id="panel-wallets" class="section-block">
       <div class="section-header">
         <div>
           <h2 class="section-title">المحافظ النقدية</h2>
-          <p class="section-subtitle">إدارة الأرصدة النقدية بالليرة والدولار</p>
+          <p class="section-subtitle">أرصدة مستقلة لكل عملة دون دمج أو تحويل</p>
         </div>
         <button id="btn-add-wallet" type="button" onclick="openWalletModal()" class="btn-emerald">
           <svg style="width:0.9rem; height:0.9rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -166,14 +150,14 @@
       <div id="wallets-grid" class="cards-grid cards-grid-2"></div>
     </section>
 
-    <!-- TAB 2 & 3: PROJECTS & DEBTS -->
-    <section id="panel-projects" class="section-block hidden" style="gap:1.25rem;">
-      <!-- Projects Subpanel -->
-      <div id="subpanel-projects-container" class="section-block">
+    <!-- TAB 2: PROJECTS & MONTHLY FINANCIAL FLOW (Completely Separated from Debts) -->
+    <section id="panel-projects" class="section-block hidden" style="gap:1.35rem;">
+      <!-- Part A: Projects -->
+      <div class="section-block">
         <div class="section-header">
           <div>
             <h2 class="section-title">المشاريع ومراكز الأرباح</h2>
-            <p class="section-subtitle">متابعة صافي العوائد وأرشفة المشاريع المنتهية</p>
+            <p class="section-subtitle">صافي المشاريع مفصولاً بالليرة والدولار بشكل مستقل</p>
           </div>
           <button id="btn-add-project" type="button" onclick="openProjectModal()" class="btn-emerald">
             <svg style="width:0.9rem; height:0.9rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -184,27 +168,116 @@
           </button>
         </div>
 
+        <!-- Independent Net Projects Summary (SYP vs USD without merging) -->
+        <div class="sub-summary-strip">
+          <div class="sub-summary-item">
+            <span class="sub-summary-label">صافي المشاريع (ل.س)</span>
+            <span id="projects-net-syp-val" class="sub-summary-val num-ltr" style="color:var(--emerald-primary);">0 SYP</span>
+          </div>
+          <div class="sub-summary-item">
+            <span class="sub-summary-label">صافي المشاريع ($)</span>
+            <span id="projects-net-usd-val" class="sub-summary-val num-ltr" style="color:var(--emerald-primary);">$0</span>
+          </div>
+        </div>
+
         <div id="projects-grid" class="cards-grid"></div>
       </div>
 
-      <!-- Debts Subpanel -->
-      <div id="subpanel-debts-container" class="section-block">
-        <div class="section-header">
+      <!-- Part B: Monthly Financial Flow (Income Statement: Income & Expenses) -->
+      <div class="section-block">
+        <div class="section-header" style="flex-wrap:wrap; gap:0.5rem;">
           <div>
-            <h2 class="section-title">الديون والذمم المالية</h2>
-            <p class="section-subtitle">الالتزامات التي لنا أو علينا مع تسوية وأرشفة فورية</p>
+            <h2 class="section-title">التدفق المالي الشهري (الإيرادات والمصروفات)</h2>
+            <p class="section-subtitle">تتبع المصروفات التشغيلية والشخصية والأرباح المسحوبة خلال الشهر</p>
           </div>
-          <button id="btn-add-debt" type="button" onclick="openDebtModal()" class="btn-emerald">
-            <svg style="width:0.9rem; height:0.9rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"/>
-              <line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-            <span>إضافة دين</span>
-          </button>
+          <div style="display:flex; align-items:center; gap:0.4rem;">
+            <button id="btn-add-flow" type="button" onclick="openMonthlyFlowModal()" class="btn-secondary">
+              <svg style="width:0.85rem; height:0.85rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              <span>تسجيل حركة شهرية</span>
+            </button>
+            <button id="btn-archive-month" type="button" onclick="archiveCurrentMonthLocally()" class="btn-emerald" title="تصفير عدادات الشهر الحالي وبدء شهر جديد">
+              <svg style="width:0.85rem; height:0.85rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="21 8 21 21 3 21 3 8"/>
+                <rect x="1" y="3" width="22" height="5"/>
+                <line x1="10" y1="12" x2="14" y2="12"/>
+              </svg>
+              <span>أرشفة الشهر</span>
+            </button>
+          </div>
         </div>
 
-        <div id="debts-list" class="cards-grid"></div>
+        <!-- Monthly Income vs Monthly Expenses Cards (Independent SYP & USD) -->
+        <div class="flow-grid-2">
+          <!-- Income Box -->
+          <div class="flow-box income">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <span style="font-size:0.78rem; font-weight:700; color:var(--emerald-primary);">إجمالي إيرادات الشهر</span>
+              <span class="badge-pill">INCOME</span>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; font-size:0.85rem;">
+              <span style="color:var(--text-muted); font-size:0.72rem;">بالليرة السورية:</span>
+              <strong id="flow-income-syp" class="num-ltr">0 SYP</strong>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; font-size:0.85rem;">
+              <span style="color:var(--text-muted); font-size:0.72rem;">بالدولار الأمريكي:</span>
+              <strong id="flow-income-usd" class="num-ltr">$0</strong>
+            </div>
+          </div>
+
+          <!-- Expenses Box -->
+          <div class="flow-box expenses">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <span style="font-size:0.78rem; font-weight:700; color:var(--rose-text);">إجمالي مصروفات الشهر</span>
+              <span class="badge-pill amber" style="color:var(--rose-text); background-color:var(--rose-soft);">EXPENSES</span>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; font-size:0.85rem;">
+              <span style="color:var(--text-muted); font-size:0.72rem;">بالليرة السورية:</span>
+              <strong id="flow-expenses-syp" class="num-ltr">0 SYP</strong>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; font-size:0.85rem;">
+              <span style="color:var(--text-muted); font-size:0.72rem;">بالدولار الأمريكي:</span>
+              <strong id="flow-expenses-usd" class="num-ltr">$0</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Monthly Flow Itemized List -->
+        <div id="monthly-flow-list" class="cards-grid"></div>
       </div>
+    </section>
+
+    <!-- TAB 3: DEBTS ONLY (Completely Dedicated View with Independent SYP & USD Totals) -->
+    <section id="panel-debts" class="section-block hidden">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">الديون والذمم المالية</h2>
+          <p class="section-subtitle">التزامات الأشخاص (لنا / علينا) مفصولة بالليرة والدولار</p>
+        </div>
+        <button id="btn-add-debt" type="button" onclick="openDebtModal()" class="btn-emerald">
+          <svg style="width:0.9rem; height:0.9rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          <span>إضافة دين</span>
+        </button>
+      </div>
+
+      <!-- Independent Net Debts Summary (SYP vs USD without merging) -->
+      <div class="sub-summary-strip">
+        <div class="sub-summary-item">
+          <span class="sub-summary-label">صافي الديون بالليرة (لنا - علينا)</span>
+          <span id="debts-net-syp-val" class="sub-summary-val num-ltr">0 SYP</span>
+        </div>
+        <div class="sub-summary-item">
+          <span class="sub-summary-label">صافي الديون بالدولار (لنا - علينا)</span>
+          <span id="debts-net-usd-val" class="sub-summary-val num-ltr">$0</span>
+        </div>
+      </div>
+
+      <div id="debts-list" class="cards-grid"></div>
     </section>
 
     <!-- Recent Context Window Strip (Last 3 Logs) -->
@@ -235,7 +308,7 @@
     </button>
   </div>
 
-  <!-- AI ASSISTANT BOTTOM SHEET (Clean Production UI - Zero Test/Demo Buttons) -->
+  <!-- AI ASSISTANT BOTTOM SHEET -->
   <div id="ai-bottom-sheet" class="modal-overlay hidden" style="padding:0;">
     <div onclick="closeAIBottomSheet()" style="position:absolute; inset:0;"></div>
 
@@ -366,6 +439,10 @@
 
         <div id="modal-view-archive" class="hidden" style="display:flex; flex-direction:column; gap:0.85rem;">
           <div>
+            <h4 style="font-size:0.76rem; font-weight:700; margin-bottom:0.4rem;">الأشهر المؤرشفة (التدفق المالي الشهري):</h4>
+            <div id="archive-months-list" style="display:flex; flex-direction:column; gap:0.45rem;"></div>
+          </div>
+          <div>
             <h4 style="font-size:0.76rem; font-weight:700; margin-bottom:0.4rem;">المشاريع المؤرشفة:</h4>
             <div id="archive-projects-list" style="display:flex; flex-direction:column; gap:0.45rem;"></div>
           </div>
@@ -420,7 +497,7 @@
       <!-- Permanent Data Wipe / Factory Reset Section -->
       <div style="border-top:1px solid var(--border-hairline); padding-top:0.85rem; display:flex; flex-direction:column; gap:0.5rem;">
         <span style="font-size:0.75rem; font-weight:700; color:var(--rose-text);">منطقة الخطر وتصفير البيانات:</span>
-        <p style="font-size:0.68rem; color:var(--text-muted);">حذف جميع المحافظ والمشاريع والديون والسجلات والأرشيف نهائياً وإعادة التطبيق كورقة بيضاء فارغة تماماً.</p>
+        <p style="font-size:0.68rem; color:var(--text-muted);">حذف جميع المحافظ والمشاريع والديون والتدفق الشهري والسجلات والأرشيف نهائياً وإعادة التطبيق كورقة بيضاء فارغة.</p>
         <button id="btn-factory-wipe" type="button" onclick="openWipeConfirmModal()" class="btn-danger" style="width:100%; padding:0.6rem;">
           <svg style="width:0.95rem; height:0.95rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="3 6 5 6 21 6"/>
@@ -445,7 +522,7 @@
         </svg>
         <h3 style="font-size:0.9rem; font-weight:700;">تأكيد الحذف النهائي وتصفير التطبيق</h3>
       </div>
-      <p style="font-size:0.78rem; color:var(--text-muted); line-height:1.6;">هل أنت متأكد من مسح كافة المحافظ والمشاريع والديون والسجلات والأرشيف بشكل نهائي؟ لا يمكن التراجع عن هذا الإجراء.</p>
+      <p style="font-size:0.78rem; color:var(--text-muted); line-height:1.6;">هل أنت متأكد من مسح كافة المحافظ والمشاريع والديون والتدفق الشهري والسجلات والأرشيف بشكل نهائي؟ لا يمكن التراجع عن هذا الإجراء.</p>
       <div style="display:flex; align-items:center; justify-content:flex-end; gap:0.5rem;">
         <button type="button" onclick="closeWipeConfirmModal()" class="btn-secondary">إلغاء</button>
         <button type="button" onclick="executePermanentDataWipe()" class="btn-danger">نعم، احذف وصفّر كل شيء</button>
@@ -453,7 +530,7 @@
     </div>
   </div>
 
-  <!-- HYBRID LOCAL ACTION MODAL -->
+  <!-- HYBRID LOCAL ACTION MODAL (Used for Wallets, FX Calculator, Projects, Monthly Flow, Debts) -->
   <div id="hybrid-action-modal" class="modal-overlay hidden">
     <div onclick="closeHybridModal()" style="position:absolute; inset:0;"></div>
     <div class="modal-card">
