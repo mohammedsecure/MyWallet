@@ -1,6 +1,6 @@
 /**
- * My Wallet v1.1 (محفظتي) - Clean Slate Hybrid Financial Architecture
- * Zero Pre-stored Data | Standalone CSS Classes | DeepSeek Chat API
+ * My Wallet v1.2 (محفظتي) - Clean Slate Hybrid Financial Architecture
+ * Enhanced DeepSeek System Prompt + Resilient Schema Normalization + Accurate Diffing
  */
 
 const STORAGE_KEYS = {
@@ -90,10 +90,185 @@ function escapeHtml(text) {
 }
 
 /**
- * Initialize Application & Purge Legacy v1.0 Demo Data
+ * Helper to normalize currency strings returned by AI or user
+ */
+function normalizeCurrencyCode(rawCur, hintText = '', fallback = 'SYP') {
+  const str = String(rawCur || '').trim().toUpperCase();
+  if (str === 'USD' || str === '$' || str.includes('دولار') || str.includes('DOLLAR')) {
+    return 'USD';
+  }
+  if (str === 'SYP' || str.includes('ل.س') || str.includes('ليرة') || str.includes('سوري')) {
+    return 'SYP';
+  }
+  const hint = String(hintText || '');
+  if (hint.includes('دولار') || hint.toUpperCase().includes('USD') || hint.includes('$')) {
+    return 'USD';
+  }
+  if (hint.includes('ليرة') || hint.includes('سوري') || hint.toUpperCase().includes('SYP')) {
+    return 'SYP';
+  }
+  return fallback;
+}
+
+/**
+ * Helper to normalize debt direction ("لنا" vs "علينا")
+ */
+function normalizeDebtType(rawType) {
+  const str = String(rawType || '').trim();
+  if (str === 'لنا' || str.includes('لنا') || str.includes('مستحق لنا') || str.includes('مدين لنا')) {
+    return 'لنا';
+  }
+  return 'علينا';
+}
+
+/**
+ * Resilient State Schema Normalizer
+ * Ensures that even when starting from an empty state, any JSON structure returned by DeepSeek
+ * is accurately mapped to the exact keys expected by the UI (`amount`, `currency`, `person`, `type`, `netSYP`, `netUSD`).
+ */
+function normalizeStateSchema(raw) {
+  const clean = getInitialCleanState();
+  if (!raw || typeof raw !== 'object') return clean;
+
+  // 1. Normalize fx_rate
+  const fxRate = Number(raw.fx_rate ?? raw.exchange_rate ?? raw.rate) > 0
+    ? Number(raw.fx_rate ?? raw.exchange_rate ?? raw.rate)
+    : (Number(appState?.fx_rate) > 0 ? Number(appState.fx_rate) : clean.fx_rate);
+
+  // 2. Normalize wallets
+  const normalizedWallets = {};
+  if (raw.wallets && typeof raw.wallets === 'object' && !Array.isArray(raw.wallets)) {
+    Object.entries(raw.wallets).forEach(([wName, wData]) => {
+      const cleanName = String(wName).trim();
+      if (!cleanName) return;
+      if (typeof wData === 'number' || typeof wData === 'string') {
+        normalizedWallets[cleanName] = {
+          amount: Number(wData) || 0,
+          currency: normalizeCurrencyCode('', cleanName, 'SYP')
+        };
+      } else if (wData && typeof wData === 'object') {
+        const amt = Number(wData.amount ?? wData.balance ?? wData.value ?? wData.total ?? 0) || 0;
+        const cur = normalizeCurrencyCode(wData.currency ?? wData.unit, cleanName, 'SYP');
+        normalizedWallets[cleanName] = {
+          amount: amt,
+          currency: cur
+        };
+      }
+    });
+  } else if (Array.isArray(raw.wallets)) {
+    raw.wallets.forEach((wItem) => {
+      if (!wItem || typeof wItem !== 'object') return;
+      const cleanName = String(wItem.name ?? wItem.wallet ?? wItem.title ?? '').trim();
+      if (!cleanName) return;
+      normalizedWallets[cleanName] = {
+        amount: Number(wItem.amount ?? wItem.balance ?? wItem.value ?? 0) || 0,
+        currency: normalizeCurrencyCode(wItem.currency ?? wItem.unit, cleanName, 'SYP')
+      };
+    });
+  }
+
+  // 3. Normalize projects
+  const normalizedProjects = {};
+  if (raw.projects && typeof raw.projects === 'object' && !Array.isArray(raw.projects)) {
+    Object.entries(raw.projects).forEach(([pName, pData]) => {
+      const cleanName = String(pName).trim();
+      if (!cleanName) return;
+      if (typeof pData === 'number') {
+        normalizedProjects[cleanName] = {
+          netSYP: Number(pData) || 0,
+          netUSD: 0,
+          summary: 'مشروع نشط'
+        };
+      } else if (pData && typeof pData === 'object') {
+        normalizedProjects[cleanName] = {
+          netSYP: Number(pData.netSYP ?? pData.syp ?? pData.amountSYP ?? (pData.currency === 'SYP' ? pData.amount : 0) ?? 0) || 0,
+          netUSD: Number(pData.netUSD ?? pData.usd ?? pData.amountUSD ?? (pData.currency === 'USD' ? pData.amount : 0) ?? 0) || 0,
+          summary: String(pData.summary ?? pData.note ?? pData.description ?? 'مشروع نشط'),
+          closed: Boolean(pData.closed || pData.archived)
+        };
+      }
+    });
+  } else if (Array.isArray(raw.projects)) {
+    raw.projects.forEach((pItem) => {
+      if (!pItem || typeof pItem !== 'object') return;
+      const cleanName = String(pItem.name ?? pItem.project ?? pItem.title ?? '').trim();
+      if (!cleanName) return;
+      normalizedProjects[cleanName] = {
+        netSYP: Number(pItem.netSYP ?? pItem.syp ?? (pItem.currency === 'SYP' ? pItem.amount : 0) ?? 0) || 0,
+        netUSD: Number(pItem.netUSD ?? pItem.usd ?? (pItem.currency === 'USD' ? pItem.amount : 0) ?? 0) || 0,
+        summary: String(pItem.summary ?? pItem.note ?? pItem.description ?? 'مشروع نشط'),
+        closed: Boolean(pItem.closed || pItem.archived)
+      };
+    });
+  }
+
+  // 4. Normalize debts (Supports both Array and Object map formats)
+  const normalizedDebts = [];
+  let nextId = 1;
+  if (Array.isArray(raw.debts)) {
+    raw.debts.forEach((dItem) => {
+      if (!dItem || typeof dItem !== 'object') return;
+      const person = String(dItem.person ?? dItem.name ?? dItem.party ?? dItem.creditor ?? dItem.debtor ?? '').trim();
+      if (!person) return;
+      const amt = Number(dItem.amount ?? dItem.balance ?? dItem.value ?? 0) || 0;
+      const cur = normalizeCurrencyCode(dItem.currency ?? dItem.unit, dItem.note || '', 'USD');
+      const type = normalizeDebtType(dItem.type ?? dItem.direction ?? dItem.status);
+      const id = Number(dItem.id) > 0 ? Number(dItem.id) : nextId++;
+      if (id >= nextId) nextId = id + 1;
+      normalizedDebts.push({
+        id,
+        person,
+        amount: amt,
+        currency: cur,
+        type,
+        note: String(dItem.note ?? dItem.description ?? dItem.summary ?? dItem.reason ?? ''),
+        settled: Boolean(dItem.settled)
+      });
+    });
+  } else if (raw.debts && typeof raw.debts === 'object') {
+    Object.entries(raw.debts).forEach(([personKey, dVal]) => {
+      const person = String(personKey).trim();
+      if (!person) return;
+      if (typeof dVal === 'number') {
+        normalizedDebts.push({
+          id: nextId++,
+          person,
+          amount: Math.abs(Number(dVal)) || 0,
+          currency: 'USD',
+          type: Number(dVal) >= 0 ? 'لنا' : 'علينا',
+          note: ''
+        });
+      } else if (dVal && typeof dVal === 'object') {
+        normalizedDebts.push({
+          id: Number(dVal.id) > 0 ? Number(dVal.id) : nextId++,
+          person: String(dVal.person ?? person).trim(),
+          amount: Number(dVal.amount ?? dVal.balance ?? dVal.value ?? 0) || 0,
+          currency: normalizeCurrencyCode(dVal.currency ?? dVal.unit, dVal.note || '', 'USD'),
+          type: normalizeDebtType(dVal.type ?? dVal.direction ?? dVal.status),
+          note: String(dVal.note ?? dVal.description ?? dVal.summary ?? ''),
+          settled: Boolean(dVal.settled)
+        });
+      }
+    });
+  }
+
+  return {
+    fx_rate: fxRate,
+    wallets: normalizedWallets,
+    projects: normalizedProjects,
+    debts: normalizedDebts,
+    logs: Array.isArray(raw.logs) ? raw.logs : [],
+    archive: {
+      projects: raw.archive && raw.archive.projects && typeof raw.archive.projects === 'object' ? raw.archive.projects : {},
+      debts: raw.archive && Array.isArray(raw.archive.debts) ? raw.archive.debts : []
+    }
+  };
+}
+
+/**
+ * Initialize Application
  */
 function initApp() {
-  // Remove legacy v1.0 pre-populated demo state automatically
   safeRemoveStorage(STORAGE_KEYS.LEGACY_V1);
 
   const savedTheme = safeGetStorage(STORAGE_KEYS.THEME, 'light');
@@ -112,23 +287,6 @@ function initApp() {
   }
 
   renderUI();
-}
-
-function normalizeStateSchema(raw) {
-  const clean = getInitialCleanState();
-  if (!raw || typeof raw !== 'object') return clean;
-
-  return {
-    fx_rate: Number(raw.fx_rate) > 0 ? Number(raw.fx_rate) : clean.fx_rate,
-    wallets: raw.wallets && typeof raw.wallets === 'object' ? raw.wallets : {},
-    projects: raw.projects && typeof raw.projects === 'object' ? raw.projects : {},
-    debts: Array.isArray(raw.debts) ? raw.debts : [],
-    logs: Array.isArray(raw.logs) ? raw.logs : [],
-    archive: {
-      projects: raw.archive && raw.archive.projects && typeof raw.archive.projects === 'object' ? raw.archive.projects : {},
-      debts: raw.archive && Array.isArray(raw.archive.debts) ? raw.archive.debts : []
-    }
-  };
 }
 
 function saveStateToStorage() {
@@ -160,9 +318,6 @@ function showToast(message) {
   }, 3000);
 }
 
-/**
- * Theme Management (Light vs Dark OLED)
- */
 function applyThemeMode(mode) {
   const root = document.documentElement;
   const sunIcon = document.getElementById('icon-sun');
@@ -187,9 +342,6 @@ function toggleTheme() {
   applyThemeMode(isDark ? 'light' : 'dark');
 }
 
-/**
- * Navigation Tab Switching
- */
 function switchTab(tabName) {
   currentTab = tabName;
   const walletsPanel = document.getElementById('panel-wallets');
@@ -282,19 +434,44 @@ function buildPrunedContextForAI(sourceState = appState) {
   };
 }
 
+/**
+ * Enhanced System Prompt (Incorporating User's Direct Structure + Explicit Field Schemas & Accounting Permissions)
+ */
 function buildSystemPrompt(sourceState = appState) {
   const prunedState = buildPrunedContextForAI(sourceState);
-  return `أنت محاسب مالي ذكي تدير نظام 'الورقة البيضاء المطلقة'. لديك الحالة المالية الحالية التالية للمستخدم (متضمنة آخر 3 حركات للسياق):
+  return `أنت محاسب مالي ذكي. مهمتك فهم كلامي بلغتي الطبيعية وتحديث الحالة المالية بدقة.
+
+الحالة المالية الحالية:
 ${JSON.stringify(prunedState, null, 2)}
 
-اقرأ طلب المستخدم، وقم بإجراء كافة الحسابات المطلوبة ذهنياً (تعديل أرصدة، إضافة، تصفير، أو إنشاء محافظ/مشاريع/ديون جديدة، وتحديد سعر الصرف).
-أرجع كائن JSON صالحاً فقط يحتوي على مفتاحين:
-1. "reply": شرح نصي قصير وواضح باللغة العربية للعمليات التي قمت بها.
-2. "updated_state": كائن الحالة الجديد بالكامل بعد تعديلاتك.`;
+قواعد الرد وتوزيع الحقول وهيكلها البرمجي:
+1. "wallets": للأرصدة النقدية الفعلية فقط (كاش دولار، كاش سوري، شام كاش، وغيرها) ولا تضع أسماء الأشخاص هنا أبداً.
+   - هيكل كل محفظة داخل كائن wallets:
+     "اسم المحفظة": { "amount": رقم_الرصيد, "currency": "USD" أو "SYP" }
+2. "debts": لالتزامات وديون وأمانات الأشخاص (لنا = أموال لنا عند الشخص / علينا = أموال للشخص عندنا أو أمانة له بذمتنا).
+   - هيكل كل عنصر داخل مصفوفة debts:
+     { "id": رقم_تسلسلي, "person": "اسم الشخص", "amount": رقم_المبلغ, "currency": "USD" أو "SYP", "type": "لنا" أو "علينا", "note": "توضيح مختصر" }
+3. "projects": لأرباح وتكاليف المشاريع والورشات.
+   - هيكل كل مشروع داخل كائن projects:
+     "اسم المشروع": { "netSYP": صافي_الليرة, "netUSD": صافي_الدولار, "summary": "وصف مختصر" }
+4. "fx_rate": سعر صرف الدولار مقابل الليرة السورية (رقم).
+
+صلاحياتك المحاسبية:
+- لك الصلاحية الكاملة لإنشاء محافظ أو ديون أو مشاريع جديدة إذا لم تكن موجودة، أو تعديل أرصدتها، أو تصفيرها عند السداد.
+- انتبه للمنطق المحاسبي المزدوج:
+  * إذا قلت لك مثلاً "للفلان عندي مبلغ 182 دولار" أو "لفلان بذمتي مبلغ"، فهذا دين/التزام في "debts" بنوع "علينا" وليس محفظة في "wallets".
+  * إذا قلت لك "فلان أعطاني مبلغاً" أو "قبضت من فلان مبلغاً نقدياً": قم بزيادة رصيد المحفظة النقدية المناسبة في "wallets" (مثل "كاش دولار" للعمليات بالدولار أو "كاش سوري" للعمليات بالليرة، وأنشئ المحفظة تلقائياً إن لم تكن موجودة)، وفي نفس الوقت حدث ذمة هذا الشخص في "debts" (إما بإنقاص/تسديد دينه إن كان "لنا" عليه دين سابق، أو بتسجيل المبلغ في "debts" كالتزام "علينا" له إن لم يكن عليه دين سابق).
+  * إذا قلت لك "أعطيت فلاناً مبلغاً" أو "سددت لفلان": اخصم المبلغ من المحفظة النقدية المناسبة في "wallets" وحدث ذمته في "debts".
+
+المطلوب:
+افهم ما أطلبه منك، قم بتحديث الأرقام المحاسبية المناسبة، وأرجع حصراً كائن JSON صالح يحتوي على:
+1. "reply": رد بشري مختصر جداً وواضح يوضح ما فعلته.
+2. "updated_state": كائن الحالة المحدث بالكامل (شاملاً fx_rate و wallets و projects و debts).`;
 }
 
 /**
  * State Diffing & Validation (`validateState`)
+ * Compares normalized currentState vs normalized updatedState across wallets, projects, debts, and fx_rate.
  */
 function validateState(currentState, updatedState) {
   const warnings = [];
@@ -313,15 +490,17 @@ function validateState(currentState, updatedState) {
   const curWallets = currentState.wallets || {};
   const newWallets = updatedState.wallets || {};
 
+  // 1. Wallets Diff
   Object.keys(curWallets).forEach((walletName) => {
     if (!Object.prototype.hasOwnProperty.call(newWallets, walletName)) {
       warnings.push(`تنبيه: هذا الإجراء سيحذف محفظة [${walletName}] بالكامل، هل أنت متأكد؟`);
     } else {
       const oldAmt = Number(curWallets[walletName].amount) || 0;
       const newAmt = Number(newWallets[walletName].amount) || 0;
-      if (oldAmt !== newAmt) {
-        const cur = newWallets[walletName].currency || curWallets[walletName].currency || 'SYP';
-        changes.push(`تحديث محفظة "${walletName}": من ${formatNumber(oldAmt, cur)} إلى ${formatNumber(newAmt, cur)}`);
+      const oldCur = curWallets[walletName].currency || 'SYP';
+      const newCur = newWallets[walletName].currency || oldCur;
+      if (oldAmt !== newAmt || oldCur !== newCur) {
+        changes.push(`تحديث محفظة "${walletName}": من ${formatNumber(oldAmt, oldCur)} إلى ${formatNumber(newAmt, newCur)}`);
       }
     }
   });
@@ -329,10 +508,11 @@ function validateState(currentState, updatedState) {
   Object.keys(newWallets).forEach((walletName) => {
     if (!Object.prototype.hasOwnProperty.call(curWallets, walletName)) {
       const cur = newWallets[walletName].currency || 'SYP';
-      changes.push(`إنشاء محفظة جديدة "${walletName}" برصيد ${formatNumber(newWallets[walletName].amount, cur)}`);
+      changes.push(`إنشاء محفظة "${walletName}" برصيد ${formatNumber(newWallets[walletName].amount, cur)}`);
     }
   });
 
+  // 2. Projects Diff
   const curProjects = currentState.projects || {};
   const newProjects = updatedState.projects || {};
   Object.keys(curProjects).forEach((projName) => {
@@ -344,31 +524,58 @@ function validateState(currentState, updatedState) {
       const oldUsd = Number(curProjects[projName].netUSD) || 0;
       const newUsd = Number(newProjects[projName].netUSD) || 0;
       if (oldSyp !== newSyp || oldUsd !== newUsd) {
-        changes.push(`تحديث مشروع "${projName}"`);
+        changes.push(`تحديث مشروع "${projName}": SYP (${formatNumber(oldSyp)} ← ${formatNumber(newSyp)}) | USD (${formatNumber(oldUsd, 'USD')} ← ${formatNumber(newUsd, 'USD')})`);
       }
     }
   });
 
   Object.keys(newProjects).forEach((projName) => {
     if (!Object.prototype.hasOwnProperty.call(curProjects, projName)) {
-      changes.push(`إضافة مشروع جديد "${projName}"`);
+      const p = newProjects[projName];
+      changes.push(`إضافة مشروع "${projName}" (SYP: ${formatNumber(p.netSYP)} | USD: ${formatNumber(p.netUSD, 'USD')})`);
     }
   });
 
+  // 3. Debts Diff (Additions, Modifications, Settlements, and Deletions)
   const curDebts = Array.isArray(currentState.debts) ? currentState.debts : [];
   const newDebts = Array.isArray(updatedState.debts) ? updatedState.debts : [];
+
   curDebts.forEach((oldDebt) => {
     const match = newDebts.find((d) =>
-      (d.id !== undefined && d.id === oldDebt.id) ||
-      (d.person && d.person === oldDebt.person)
+      (d.id !== undefined && Number(d.id) === Number(oldDebt.id)) ||
+      (d.person && d.person.trim() === oldDebt.person.trim())
     );
     if (!match) {
       warnings.push(`تنبيه: هذا الإجراء سيحذف سجل الدين الخاص بـ [${oldDebt.person}] بالكامل، هل أنت متأكد؟`);
+    } else {
+      const oldAmt = Number(oldDebt.amount) || 0;
+      const newAmt = Number(match.amount) || 0;
+      const oldType = oldDebt.type || 'علينا';
+      const newType = match.type || oldType;
+      const cur = match.currency || oldDebt.currency || 'USD';
+      if (oldAmt !== newAmt || oldType !== newType) {
+        if (newAmt <= 0 || match.settled) {
+          changes.push(`تسديد وإغلاق ذمة "${oldDebt.person}" بالكامل (كانت ${formatNumber(oldAmt, cur)})`);
+        } else {
+          changes.push(`تحديث ذمة "${oldDebt.person}" (${newType}): من ${formatNumber(oldAmt, oldDebt.currency)} إلى ${formatNumber(newAmt, cur)}`);
+        }
+      }
     }
   });
 
+  newDebts.forEach((newDebt) => {
+    const existed = curDebts.find((d) =>
+      (d.id !== undefined && Number(d.id) === Number(newDebt.id)) ||
+      (d.person && d.person.trim() === newDebt.person.trim())
+    );
+    if (!existed && Number(newDebt.amount) > 0) {
+      changes.push(`تسجيل ذمة جديدة (${newDebt.type || 'علينا'}) لـ "${newDebt.person}": ${formatNumber(newDebt.amount, newDebt.currency || 'USD')}`);
+    }
+  });
+
+  // 4. FX Rate Diff
   if (Number(updatedState.fx_rate) && Number(updatedState.fx_rate) !== Number(currentState.fx_rate)) {
-    changes.push(`تحديث سعر الصرف إلى ${formatNumber(updatedState.fx_rate)} ل.س/$`);
+    changes.push(`تحديث سعر الصرف: من ${formatNumber(currentState.fx_rate)} إلى ${formatNumber(updatedState.fx_rate)} ل.س/$`);
   }
 
   return {
@@ -380,7 +587,7 @@ function validateState(currentState, updatedState) {
 }
 
 /**
- * Render Complete UI with Standalone CSS Classes
+ * Render Complete UI
  */
 function renderUI() {
   const fx = Number(appState.fx_rate) || 15000;
@@ -643,7 +850,7 @@ function renderContextLogsStrip() {
 
 /**
  * ============================================================================
- * HYBRID LOCAL OPERATIONS (Direct Frontend Execution)
+ * HYBRID LOCAL OPERATIONS
  * ============================================================================
  */
 
@@ -665,7 +872,7 @@ function openWalletModal() {
   document.getElementById('hybrid-modal-fields').innerHTML = `
     <div>
       <label class="field-label">اسم المحفظة:</label>
-      <input id="hybrid-wallet-name" type="text" required placeholder="مثال: كاش سوري أو محفظة الدولار" />
+      <input id="hybrid-wallet-name" type="text" required placeholder="مثال: كاش سوري أو كاش دولار" />
     </div>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
       <div>
@@ -1070,13 +1277,21 @@ async function sendCommandToAI() {
       .replace(/^```\s*/i, '')
       .replace(/\s*```$/i, '')
       .trim();
-    const aiResult = JSON.parse(cleaned);
+    const parsed = JSON.parse(cleaned);
 
-    if (!aiResult || !aiResult.updated_state) {
-      throw new Error('لم يُرجع الذكاء الاصطناعي كائن updated_state صالحاً.');
+    // Support both { reply, updated_state } and direct state object fallback
+    const rawUpdatedState = parsed.updated_state || parsed.state || parsed;
+    if (!rawUpdatedState || typeof rawUpdatedState !== 'object') {
+      throw new Error('لم يُرجع الذكاء الاصطناعي كائن حالة صالحاً.');
     }
 
-    presentAIProposal(commandText, aiResult);
+    // Normalize the incoming state BEFORE diffing and presenting so all keys match
+    const normalizedProposedState = normalizeStateSchema(rawUpdatedState);
+
+    presentAIProposal(commandText, {
+      reply: parsed.reply || 'تم تحليل العملية وتحديث الأرصدة المحاسبية.',
+      updated_state: normalizedProposedState
+    });
   } catch (err) {
     showToast(err.message || 'تعذر الاتصال بخدمة DeepSeek API');
   } finally {
@@ -1110,7 +1325,7 @@ function presentAIProposal(commandText, aiResult) {
 
   const allNotes = [...validation.warnings, ...validation.changes];
   if (allNotes.length === 0) {
-    diffPreviewEl.innerHTML = `<div style="color:var(--text-muted);">لا توجد تغييرات في الأرصدة عن الحالة الحالية.</div>`;
+    diffPreviewEl.innerHTML = `<div style="color:var(--text-muted);">لم يتم رصد تغييرات رقمية إضافية على الأرصدة الحالية.</div>`;
   } else {
     diffPreviewEl.innerHTML = allNotes.map((line) => {
       const isWarn = line.startsWith('تنبيه:');
