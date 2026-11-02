@@ -838,3 +838,39 @@ input:focus, textarea:focus, select:focus {
   flex-direction: column;
   gap: 0.65rem;
 }
+
+/* ==========================================================================
+   v1.4 Additions: Housing Split Card & Project Assets Badge
+   ========================================================================== */
+.housing-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-hairline);
+  border-right: 3px solid #0284C7;
+  border-radius: 0.8rem;
+  padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.housing-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+
+@media (min-width: 540px) {
+  .housing-grid-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.housing-stat-box {
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-hairline);
+  border-radius: 0.6rem;
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
